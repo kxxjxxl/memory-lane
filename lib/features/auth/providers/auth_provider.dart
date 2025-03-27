@@ -1,4 +1,3 @@
-// lib/features/auth/providers/auth_provider.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../../../repositories/auth_repository.dart';
@@ -16,7 +15,7 @@ class AuthProvider with ChangeNotifier {
   User? get user => _user;
   String? get error => _error;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
-
+  
   // Expose the auth state changes stream
   Stream<User?> get authStateChanges => _authRepository.authStateChanges;
 
@@ -38,6 +37,18 @@ class AuthProvider with ChangeNotifier {
   Future<void> signIn(String email, String password) async {
     try {
       await _authRepository.signIn(email, password);
+      _error = null;
+    } catch (e) {
+      _status = AuthStatus.error;
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  // Sign in with Google
+  Future<void> signInWithGoogle() async {
+    try {
+      await _authRepository.signInWithGoogle();
       _error = null;
     } catch (e) {
       _status = AuthStatus.error;

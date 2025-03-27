@@ -1,5 +1,7 @@
 // lib/core/widgets/custom_text_field.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../features/theme/theme_provider.dart';
 
 class CustomTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -28,19 +30,31 @@ class _CustomTextFieldState extends State<CustomTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    
     return TextFormField(
       controller: widget.controller,
       obscureText: widget.isPassword ? _obscureText : false,
       validator: widget.validator,
       keyboardType: widget.keyboardType,
+      style: TextStyle(
+        color: isDarkMode ? Colors.white : Colors.black,
+      ),
       decoration: InputDecoration(
         hintText: widget.hintText,
-        prefixIcon: Icon(widget.prefixIcon, color: Colors.grey),
+        hintStyle: TextStyle(
+          color: isDarkMode ? Colors.grey.shade400 : Colors.grey,
+        ),
+        prefixIcon: Icon(
+          widget.prefixIcon, 
+          color: isDarkMode ? Colors.grey.shade400 : Colors.grey,
+        ),
         suffixIcon: widget.isPassword
             ? IconButton(
                 icon: Icon(
                   _obscureText ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.grey,
+                  color: isDarkMode ? Colors.grey.shade400 : Colors.grey,
                 ),
                 onPressed: () {
                   setState(() {
@@ -52,22 +66,28 @@ class _CustomTextFieldState extends State<CustomTextField> {
         contentPadding: const EdgeInsets.symmetric(vertical: 18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.grey),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.grey.shade700 : Colors.grey,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.blue.shade700),
+          borderSide: BorderSide(
+            color: isDarkMode ? Colors.blue.shade400 : Colors.blue.shade700,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
           borderSide: const BorderSide(color: Colors.red),
         ),
         filled: true,
-        fillColor: Colors.grey.shade50,
+        fillColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey.shade50,
       ),
     );
   }

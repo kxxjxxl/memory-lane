@@ -1,10 +1,12 @@
 // lib/features/auth/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../providers/auth_provider.dart' as app_auth;
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
 import '../../../core/widgets/custom_text_field.dart';
+import '../../../core/widgets/google_sign_in_button.dart';
+import '../../theme/theme_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -18,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
 
   @override
   void dispose() {
@@ -33,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       try {
-        await Provider.of<AuthProvider>(context, listen: false).signIn(
+        await Provider.of<app_auth.AuthProvider>(context, listen: false).signIn(
           _emailController.text.trim(),
           _passwordController.text.trim(),
         );
@@ -53,9 +56,32 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isGoogleLoading = true;
+    });
+    try {
+      await Provider.of<app_auth.AuthProvider>(context, listen: false)
+          .signInWithGoogle();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGoogleLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authProvider = Provider.of<app_auth.AuthProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     // Redirect if authenticated
     if (authProvider.isAuthenticated) {
@@ -65,14 +91,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: themeProvider.isDarkMode ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back, 
+            color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          // Theme toggle button
+          IconButton(
+            icon: Icon(
+              themeProvider.isDarkMode 
+                ? Icons.wb_sunny_outlined 
+                : Icons.nights_stay_outlined,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+            ),
+            onPressed: () {
+              themeProvider.toggleTheme();
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -83,19 +126,20 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   "Welcome Back",
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
+                    color: themeProvider.isDarkMode ? Colors.white : Colors.black,
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   "Sign in to continue",
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                    color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey,
                   ),
                 ),
                 const SizedBox(height: 50),
@@ -148,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       );
                     },
-                    child: const Text(
+                    child: Text(
                       "Forgot Password?",
                       style: TextStyle(
                         color: Colors.blue,
@@ -183,15 +227,39 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 
+                // Or Divider
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Row(
+                    children: [
+                      Expanded(child: Divider(color: themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          "OR",
+                          style: TextStyle(color: themeProvider.isDarkMode ? Colors.grey.shade500 : Colors.grey),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300)),
+                    ],
+                  ),
+                ),
+                
+                // Google Sign In Button
+                GoogleSignInButton(
+                  isLoading: _isGoogleLoading,
+                  onPressed: _signInWithGoogle,
+                ),
+                
                 const SizedBox(height: 20),
                 
                 // Register Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey),
                     ),
                     TextButton(
                       onPressed: () {

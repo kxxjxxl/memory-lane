@@ -1,8 +1,9 @@
 // lib/features/auth/screens/reset_password_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../providers/auth_provider.dart' as app_auth;
 import '../../../core/widgets/custom_text_field.dart';
+import '../../theme/theme_provider.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({Key? key}) : super(key: key);
@@ -30,7 +31,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       });
 
       try {
-        await Provider.of<AuthProvider>(context, listen: false)
+        await Provider.of<app_auth.AuthProvider>(context, listen: false)
             .resetPassword(_emailController.text.trim());
         
         setState(() {
@@ -54,23 +55,42 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: themeProvider.isDarkMode ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back, 
+            color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           "Reset Password",
           style: TextStyle(
-            color: Colors.black,
+            color: themeProvider.isDarkMode ? Colors.white : Colors.black,
             fontWeight: FontWeight.w500,
           ),
         ),
         centerTitle: true,
+        actions: [
+          // Theme toggle button
+          IconButton(
+            icon: Icon(
+              themeProvider.isDarkMode 
+                ? Icons.wb_sunny_outlined 
+                : Icons.nights_stay_outlined,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+            ),
+            onPressed: () {
+              themeProvider.toggleTheme();
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -80,24 +100,27 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   Widget _buildResetForm() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Forgot your password?",
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             "Enter your email address and we'll send you a link to reset your password.",
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey,
             ),
           ),
           const SizedBox(height: 40),
@@ -150,29 +173,32 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   Widget _buildSuccessScreen() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(
           Icons.mark_email_read,
           size: 100,
-          color: Colors.blue[800],
+          color: themeProvider.isDarkMode ? Colors.blue[400] : Colors.blue[800],
         ),
         const SizedBox(height: 20),
-        const Text(
+        Text(
           "Check your inbox!",
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
+            color: themeProvider.isDarkMode ? Colors.white : Colors.black,
           ),
         ),
         const SizedBox(height: 12),
         Text(
           "We've sent a password reset link to ${_emailController.text}",
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
-            color: Colors.grey,
+            color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey,
           ),
         ),
         const SizedBox(height: 40),

@@ -1,3 +1,4 @@
+
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 
@@ -21,6 +22,16 @@ class AuthRepository {
   Future<User?> register(String email, String password) async {
     try {
       final credential = await _authService.registerWithEmailAndPassword(email, password);
+      return credential.user;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Sign in with Google
+  Future<User?> signInWithGoogle() async {
+    try {
+      final credential = await _authService.signInWithGoogle();
       return credential.user;
     } catch (e) {
       rethrow;

@@ -1,9 +1,10 @@
 // lib/features/auth/screens/register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../providers/auth_provider.dart' as app_auth;
 import 'login_screen.dart';
 import '../../../core/widgets/custom_text_field.dart';
+import '../../theme/theme_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -36,7 +37,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       try {
-        await Provider.of<AuthProvider>(context, listen: false).register(
+        await Provider.of<app_auth.AuthProvider>(context, listen: false).register(
           _emailController.text.trim(),
           _passwordController.text.trim(),
         );
@@ -58,7 +59,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authProvider = Provider.of<app_auth.AuthProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     // Redirect if authenticated
     if (authProvider.isAuthenticated) {
@@ -68,14 +70,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: themeProvider.isDarkMode ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back, 
+            color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          // Theme toggle button
+          IconButton(
+            icon: Icon(
+              themeProvider.isDarkMode 
+                ? Icons.wb_sunny_outlined 
+                : Icons.nights_stay_outlined,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+            ),
+            onPressed: () {
+              themeProvider.toggleTheme();
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -86,19 +105,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   "Create Account",
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
+                    color: themeProvider.isDarkMode ? Colors.white : Colors.black,
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   "Sign up to start your memory journey",
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                    color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey,
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -202,9 +222,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       "Already have an account? ",
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey),
                     ),
                     TextButton(
                       onPressed: () {
