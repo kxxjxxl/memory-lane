@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1093761754434",
+    "project_id": "memory-lane-473d5",
+    "storage_bucket": "memory-lane-473d5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1093761754434:android:ed62ef1559b7b3227e94db",
+        "android_client_info": {
+          "package_name": "com.memorylane.memory_lane"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZtp64nKt3-SMIid-KgF_boApA3xVzqVI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
