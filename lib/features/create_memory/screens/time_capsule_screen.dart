@@ -127,7 +127,10 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: List.generate(
                     _totalSteps,
-                    (index) => _buildStepIndicator(index),
+                    (index) => Tooltip(
+                      message: _getStepTitle(index),
+                      child: _buildStepIndicator(index),
+                    ),
                   ),
                 ),
               ),
@@ -225,52 +228,66 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     final isCompleted = index < _currentStep;
     final isCurrent = index == _currentStep;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Step number or check
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: isActive ? _getCapsuleColor() : Colors.grey[300],
-            shape: BoxShape.circle,
-            boxShadow: isCurrent
-                ? [
-                    BoxShadow(
-                      color: _getCapsuleColor().withOpacity(0.3),
-                      blurRadius: 10,
-                      spreadRadius: 2,
+    return GestureDetector(
+      onTap: () {
+        // Allow navigation to this step if it's already active or previous steps are completed
+        if (index <= _currentStep) {
+          setState(() {
+            _currentStep = index;
+          });
+        }
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Step number or check
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isActive ? _getCapsuleColor() : Colors.grey[300],
+              shape: BoxShape.circle,
+              boxShadow: isCurrent
+                  ? [
+                      BoxShadow(
+                        color: _getCapsuleColor().withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ]
+                  : null,
+              border: index <= _currentStep
+                  ? Border.all(color: Colors.white, width: 2)
+                  : null,
+            ),
+            child: Center(
+              child: isCompleted
+                  ? const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 20,
                     )
-                  ]
-                : null,
+                  : Icon(
+                      _getIconForStep(index),
+                      color: Colors.white,
+                      size: 20,
+                    ),
+            ),
           ),
-          child: Center(
-            child: isCompleted
-                ? const Icon(
-                    Icons.check,
-                    color: Colors.white,
-                    size: 20,
-                  )
-                : Icon(
-                    _getIconForStep(index),
-                    color: Colors.white,
-                    size: 20,
-                  ),
-          ),
-        ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
 
-        // Step label
-        Text(
-          _getStepShortLabel(index),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            color: isActive ? _getCapsuleColor() : Colors.grey,
+          // Step label
+          Text(
+            _getStepShortLabel(index),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              color: isActive ? _getCapsuleColor() : Colors.grey,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
