@@ -1,33 +1,36 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
+// Use an alias for your custom AuthProvider
 import 'features/auth/providers/auth_provider.dart' as app_auth;
 import 'features/auth/screens/welcome_screen.dart';
 import 'features/map/screens/home_screen.dart';
 import 'features/theme/theme_provider.dart';
 import 'core/animations/page_transitions.dart';
+import 'features/navigation/screens/bottom_nav_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
+  
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-
+  
   // Enable system overlay style based on theme
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
     ),
   );
-
+  
   runApp(const MyApp());
 }
 
@@ -53,6 +56,10 @@ class MyApp extends StatelessWidget {
                   return FadePageRoute(
                     page: const HomeScreen(),
                   );
+                case '/main':
+                  return FadePageRoute(
+                    page: const BottomNavController(),
+                  );
                 default:
                   return null;
               }
@@ -72,8 +79,7 @@ class AnimatedSplash extends StatefulWidget {
   State<AnimatedSplash> createState() => _AnimatedSplashState();
 }
 
-class _AnimatedSplashState extends State<AnimatedSplash>
-    with SingleTickerProviderStateMixin {
+class _AnimatedSplashState extends State<AnimatedSplash> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -85,21 +91,21 @@ class _AnimatedSplashState extends State<AnimatedSplash>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     );
-
+    
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
-
+    
     _scaleAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.0, 0.7, curve: Curves.easeOutBack),
       ),
     );
-
+    
     _controller.forward().then((_) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
@@ -120,10 +126,9 @@ class _AnimatedSplashState extends State<AnimatedSplash>
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-
+    
     return Scaffold(
-      backgroundColor:
-          themeProvider.isDarkMode ? const Color(0xFF121212) : Colors.white,
+      backgroundColor: themeProvider.isDarkMode ? const Color(0xFF121212) : Colors.white,
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
@@ -139,17 +144,13 @@ class _AnimatedSplashState extends State<AnimatedSplash>
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: themeProvider.isDarkMode
-                            ? Colors.blue.shade800
-                            : Colors.blue.shade100,
+                        color: themeProvider.isDarkMode ? Colors.blue.shade800 : Colors.blue.shade100,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.location_on,
                         size: 60,
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : Colors.blue[800],
+                        color: themeProvider.isDarkMode ? Colors.white : Colors.blue[800],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -158,9 +159,7 @@ class _AnimatedSplashState extends State<AnimatedSplash>
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : Colors.black,
+                        color: themeProvider.isDarkMode ? Colors.white : Colors.black,
                       ),
                     ),
                   ],
@@ -188,7 +187,7 @@ class AuthenticationWrapper extends StatelessWidget {
           final bool isLoggedIn = snapshot.hasData;
           return isLoggedIn ? const HomeScreen() : const WelcomeScreen();
         }
-
+        
         // While determining the auth state, show a loading indicator
         return const Scaffold(
           body: Center(
