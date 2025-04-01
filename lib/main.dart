@@ -12,9 +12,27 @@ import 'features/theme/theme_provider.dart';
 import 'core/animations/page_transitions.dart';
 import 'features/navigation/screens/bottom_nav_controller.dart';
 import 'features/create_memory/providers/memory_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:js' as js;
+import 'package:flutter/foundation.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables with a try-catch block
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print('Error loading .env file: $e');
+    // You might want to set default values here
+    dotenv.env['GOOGLE_MAPS_API_KEY'] = '';  // or your default value
+  }
+  
+  // Set API key for web
+  if (kIsWeb) {
+    js.context['googleMapsApiKey'] = dotenv.env['GOOGLE_MAPS_API_KEY'];
+  }
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );

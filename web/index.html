@@ -31,8 +31,25 @@
 
   <title>memory_lane</title>
   <link rel="manifest" href="manifest.json">
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA93gqnRDbQ_cDxabcLbwNu6js6ONuadTE"></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // This function will be called from Flutter code
+    function getGoogleMapsApiKey() {
+      return window.googleMapsApiKey;
+    }
+  </script>
+  <script id="google-maps" async defer></script>
+
+  <!-- Add this script to set the API key from Flutter -->
+  <script>
+    window.addEventListener('flutter-first-frame', function() {
+      // When Flutter app loads, it will set this value
+      var script = document.getElementById('google-maps');
+      script.src = 'https://maps.googleapis.com/maps/api/js?key=' + window.googleMapsApiKey;
+    });
+  </script>
 </body>
 </html>

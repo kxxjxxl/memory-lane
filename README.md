@@ -44,3 +44,9 @@ A location-based digital time capsule mobile application that transforms how peo
 - Backend: Firebase (Auth, Firestore, Storage, Messaging)
 - Location: Google Maps API
 - Media: Native media capture and processing
+
+## Environment Setup
+
+1. Copy `.env.template` to a new file named `.env`
+2. Fill in your API keys in the `.env` file
+3. Never commit your `.env` file to version control

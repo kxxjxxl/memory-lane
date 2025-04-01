@@ -6,6 +6,14 @@ import '../../theme/theme_provider.dart';
 import '../providers/memory_provider.dart';
 import '../../../models/memory_capsule.dart';
 import '../widgets/media_widgets.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../services/location_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:async';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class TimeCapsuleScreen extends StatefulWidget {
   const TimeCapsuleScreen({Key? key}) : super(key: key);
@@ -52,6 +60,17 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     },
   ];
 
+  final LocationService _locationService = LocationService();
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+  final LatLng _defaultLocation = const LatLng(37.7749, -122.4194); // San Francisco as default
+
+  final TextEditingController _searchController = TextEditingController();
+  List<PlaceData> _searchResults = [];
+  bool _isSearching = false;
+
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +86,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   @override
   void dispose() {
     _messageController.dispose();
+    _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -215,7 +236,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                         memoryProvider.error!,
                         style: const TextStyle(color: Colors.red),
                       ),
-                    ),
+                  ),
 
                   // Navigation button
                   Container(
@@ -225,15 +246,15 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                       onPressed: memoryProvider.isLoading
                           ? null
                           : () async {
-                              setState(() {
-                                if (_currentStep < _totalSteps - 1) {
-                                  _currentStep++;
-                                } else {
-                                  // Save capsule logic
+                        setState(() {
+                          if (_currentStep < _totalSteps - 1) {
+                            _currentStep++;
+                          } else {
+                            // Save capsule logic
                                   _saveMemoryCapsule(context);
-                                }
-                              });
-                            },
+                          }
+                        });
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _getCapsuleColor().withOpacity(0.9),
                         foregroundColor: Colors.white,
@@ -304,55 +325,55 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         }
       },
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Step number or check
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Step number or check
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isActive ? _getCapsuleColor() : Colors.grey[300],
-              shape: BoxShape.circle,
-              boxShadow: isCurrent
-                  ? [
-                      BoxShadow(
-                        color: _getCapsuleColor().withOpacity(0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      )
-                    ]
-                  : null,
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isActive ? _getCapsuleColor() : Colors.grey[300],
+            shape: BoxShape.circle,
+            boxShadow: isCurrent
+                ? [
+                    BoxShadow(
+                      color: _getCapsuleColor().withOpacity(0.3),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    )
+                  ]
+                : null,
               border: index <= _currentStep
                   ? Border.all(color: Colors.white, width: 2)
-                  : null,
-            ),
-            child: Center(
-              child: isCompleted
-                  ? const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 20,
-                    )
-                  : Icon(
-                      _getIconForStep(index),
-                      color: Colors.white,
-                      size: 20,
-                    ),
-            ),
+                : null,
           ),
-          const SizedBox(height: 4),
+          child: Center(
+            child: isCompleted
+                ? const Icon(
+                    Icons.check,
+                    color: Colors.white,
+                    size: 20,
+                  )
+                : Icon(
+                    _getIconForStep(index),
+                    color: Colors.white,
+                    size: 20,
+                  ),
+          ),
+        ),
+        const SizedBox(height: 4),
 
-          // Step label
-          Text(
-            _getStepShortLabel(index),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              color: isActive ? _getCapsuleColor() : Colors.grey,
-            ),
+        // Step label
+        Text(
+          _getStepShortLabel(index),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            color: isActive ? _getCapsuleColor() : Colors.grey,
           ),
-        ],
+        ),
+      ],
       ),
     );
   }
@@ -569,7 +590,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                 icon: Icons.photo,
                 label: 'Photos',
                 color: Colors.blue,
-                onTap: () {
+          onTap: () {
                   memoryProvider.pickImages();
                 },
               ),
@@ -594,9 +615,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                 onTap: () {
                   memoryProvider.pickAudio();
                 },
-              ),
-            ),
-          ],
+                  ),
+                ),
+              ],
         ),
 
         const SizedBox(height: 24),
@@ -613,18 +634,18 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
               ),
             ),
             if (memoryProvider.mediaItems.isNotEmpty)
-              TextButton(
-                onPressed: () {
+            TextButton(
+              onPressed: () {
                   memoryProvider.clearMedia();
-                },
-                child: Text(
-                  'Clear All',
-                  style: TextStyle(
-                    color: _getCapsuleColor(),
-                    fontWeight: FontWeight.w500,
-                  ),
+              },
+              child: Text(
+                'Clear All',
+                style: TextStyle(
+                  color: _getCapsuleColor(),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
+            ),
           ],
         ),
 
@@ -634,41 +655,41 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         Expanded(
           child: memoryProvider.mediaItems.isEmpty
               ? Container(
-                  decoration: BoxDecoration(
+            decoration: BoxDecoration(
                     color: isDarkMode
-                        ? const Color(0xFF2A2A2A)
-                        : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.grey[400]!.withOpacity(0.3),
-                      width: 1,
+                  ? const Color(0xFF2A2A2A)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.grey[400]!.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.photo_library_outlined,
+                    size: 40,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'No items selected yet',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 16,
                     ),
                   ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.photo_library_outlined,
-                          size: 40,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No items selected yet',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                ],
+              ),
+            ),
                 )
               : MediaGrid(
                   mediaItems: memoryProvider.mediaItems,
                   onRemove: (index) => memoryProvider.removeMediaItem(index),
-                ),
+          ),
         ),
       ],
     );
@@ -682,9 +703,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+            child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
+              decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
@@ -694,8 +715,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
+                children: [
+                  Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.2),
@@ -724,45 +745,81 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   // Step 3: Set Location
   Widget _buildSetLocationStep() {
     final memoryProvider = Provider.of<MemoryProvider>(context);
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    
+    // Convert GeoPoint to LatLng if a location is already set
+    LatLng _currentLocation = memoryProvider.location.latitude != 0 
+        ? LatLng(memoryProvider.location.latitude, memoryProvider.location.longitude)
+        : _defaultLocation;
+    
+    // Update markers when location changes
+    _updateMarkers(_currentLocation);
     
     return Column(
       children: [
-        // Map placeholder
+        // Map with Google Maps
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6EEF8),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
               child: Stack(
                 children: [
-                  // Map container
+                // Conditionally render Google Maps based on platform
+                if (kIsWeb)
+                  // For web, use a fallback map image with a marker
+                  Stack(
+                    children: [
+                      // Static map image
                   Container(
-                    decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                       image: DecorationImage(
                         image: NetworkImage(
-                            'https://images.unsplash.com/photo-1553702446-a39d6fbee593?q=80'),
+                              'https://maps.googleapis.com/maps/api/staticmap?'
+                              'center=${_currentLocation.latitude},${_currentLocation.longitude}'
+                              '&zoom=14&size=600x400&markers=color:red|'
+                              '${_currentLocation.latitude},${_currentLocation.longitude}'
+                              '&key=${dotenv.env['GOOGLE_MAPS_API_KEY']}'
+                            ),
                         fit: BoxFit.cover,
                       ),
                     ),
                   ),
 
-                  // Map overlay for better UI
-                  Center(
-                    child: Icon(
-                      Icons.location_on,
-                      size: 50,
-                      color: _getCapsuleColor(),
+                      // Tap listener for web
+                      GestureDetector(
+                        onTap: () {
+                          // Show a dialog to manually enter coordinates on web
+                          _showLocationPickerDialog();
+                        },
+                        child: Container(
+                          color: Colors.transparent,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  // For mobile, use the Google Maps widget
+                  GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: _currentLocation,
+                      zoom: 14,
                     ),
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+                      // Apply custom map style for dark mode
+                      if (isDarkMode) {
+                        _setMapDarkMode(controller);
+                      }
+                    },
+                    markers: _markers,
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    onTap: (latLng) {
+                      // Set marker on tap
+                      _setMarker(latLng);
+                      // Convert to GeoPoint and update provider
+                      _updateLocationInProvider(latLng);
+                    },
                   ),
 
                   // Search bar at top
@@ -770,7 +827,10 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     top: 16,
                     left: 16,
                     right: 16,
-                    child: Container(
+                    child: Column(
+                      children: [
+                        // Search bar
+                        Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       height: 50,
                       decoration: BoxDecoration(
@@ -788,12 +848,123 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                         children: [
                           const Icon(Icons.search, color: Colors.grey),
                           const SizedBox(width: 8),
-                          const Expanded(
+                              Expanded(
                             child: TextField(
-                              decoration: InputDecoration(
+                                  controller: _searchController,
+                                  decoration: const InputDecoration(
                                 hintText: 'Search for a location',
                                 border: InputBorder.none,
                                 hintStyle: TextStyle(color: Colors.grey),
+                              ),
+                                  onChanged: (value) {
+                                    // Debounce search to avoid too many API calls
+                                    _debounce?.cancel();
+                                    _debounce = Timer(const Duration(milliseconds: 500), () {
+                                      _searchPlaces(value);
+                                    });
+                                  },
+                                ),
+                              ),
+                              if (_isSearching)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              if (_searchController.text.isNotEmpty && !_isSearching)
+                                IconButton(
+                                  icon: const Icon(Icons.clear, color: Colors.grey),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchResults = [];
+                                    });
+                                  },
+                          ),
+                        ],
+                      ),
+                    ),
+                        
+                        // Search results
+                        if (_searchResults.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            constraints: BoxConstraints(
+                              maxHeight: 300,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+                            child: ListView.separated(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: _searchResults.length > 5 ? 5 : _searchResults.length,
+                              separatorBuilder: (context, index) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final place = _searchResults[index];
+                                return ListTile(
+                                  title: Text(place.name),
+                                  subtitle: Text(
+                                    place.formattedAddress ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  leading: const Icon(Icons.location_on),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  dense: true,
+                                  onTap: () => _selectPlace(place),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                
+                // Location info
+                if (memoryProvider.locationName.isNotEmpty)
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            color: _getCapsuleColor(),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              memoryProvider.locationName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -801,8 +972,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -824,23 +994,243 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
               ),
               elevation: 2,
             ),
-            onPressed: () {
-              // Set default location for demo purposes
-              memoryProvider.setLocation(
-                const GeoPoint(37.7749, -122.4194), // Default to San Francisco
-                '123 Memory Lane, San Francisco',
-              );
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Current location selected'),
-                ),
-              );
-            },
+            onPressed: () => _getCurrentLocation(),
           ),
         ),
       ],
     );
+  }
+
+  // Add a new method for web location picker dialog
+  void _showLocationPickerDialog() {
+    final TextEditingController latController = TextEditingController();
+    final TextEditingController lngController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Enter Location'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: latController,
+                decoration: const InputDecoration(
+                  labelText: 'Latitude',
+                  hintText: 'e.g. 37.7749',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: lngController,
+                decoration: const InputDecoration(
+                  labelText: 'Longitude',
+                  hintText: 'e.g. -122.4194',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+            onPressed: () {
+                Navigator.pop(context);
+                
+                try {
+                  final lat = double.parse(latController.text);
+                  final lng = double.parse(lngController.text);
+                  
+                  final latLng = LatLng(lat, lng);
+                  _setMarker(latLng);
+                  _updateLocationInProvider(latLng);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Invalid coordinates')),
+                  );
+                }
+              },
+              child: const Text('Set Location'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Update markers on the map
+  void _updateMarkers(LatLng position) {
+    setState(() {
+      _markers = {
+        Marker(
+          markerId: const MarkerId('selected_location'),
+          position: position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        ),
+      };
+    });
+  }
+
+  // Set marker at the tapped position
+  void _setMarker(LatLng position) {
+    setState(() {
+      _markers = {
+        Marker(
+          markerId: const MarkerId('selected_location'),
+          position: position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        ),
+      };
+    });
+    
+    // Move camera to the selected position
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLng(position),
+    );
+  }
+
+  // Update location in the provider
+  Future<void> _updateLocationInProvider(LatLng latLng) async {
+    final provider = Provider.of<MemoryProvider>(context, listen: false);
+    final geoPoint = GeoPoint(latLng.latitude, latLng.longitude);
+    
+    // Get address from coordinates
+    final address = await _locationService.getAddressFromCoordinates(geoPoint);
+    
+    // Update provider
+    provider.setLocation(geoPoint, address);
+  }
+
+  // Get current location
+  Future<void> _getCurrentLocation() async {
+    final location = await _locationService.getCurrentLocation();
+    
+    if (location != null) {
+      final latLng = LatLng(location.latitude, location.longitude);
+      
+      // Update UI with the new location
+      _setMarker(latLng);
+      
+      // Center map on the current location
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLng(latLng),
+      );
+      
+      // Update provider
+      _updateLocationInProvider(latLng);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Current location selected'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not get current location. Please ensure location services are enabled.'),
+        ),
+      );
+    }
+  }
+
+  // Set dark mode style for the map
+  void _setMapDarkMode(GoogleMapController controller) {
+    controller.setMapStyle('''
+      [
+        {
+          "elementType": "geometry",
+          "stylers": [{"color": "#242f3e"}]
+        },
+        {
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#746855"}]
+        },
+        {
+          "elementType": "labels.text.stroke",
+          "stylers": [{"color": "#242f3e"}]
+        },
+        {
+          "featureType": "administrative.locality",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#d59563"}]
+        },
+        {
+          "featureType": "poi",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#d59563"}]
+        },
+        {
+          "featureType": "poi.park",
+          "elementType": "geometry",
+          "stylers": [{"color": "#263c3f"}]
+        },
+        {
+          "featureType": "poi.park",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#6b9a76"}]
+        },
+        {
+          "featureType": "road",
+          "elementType": "geometry",
+          "stylers": [{"color": "#38414e"}]
+        },
+        {
+          "featureType": "road",
+          "elementType": "geometry.stroke",
+          "stylers": [{"color": "#212a37"}]
+        },
+        {
+          "featureType": "road",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#9ca5b3"}]
+        },
+        {
+          "featureType": "road.highway",
+          "elementType": "geometry",
+          "stylers": [{"color": "#746855"}]
+        },
+        {
+          "featureType": "road.highway",
+          "elementType": "geometry.stroke",
+          "stylers": [{"color": "#1f2835"}]
+        },
+        {
+          "featureType": "road.highway",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#f3d19c"}]
+        },
+        {
+          "featureType": "transit",
+          "elementType": "geometry",
+          "stylers": [{"color": "#2f3948"}]
+        },
+        {
+          "featureType": "transit.station",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#d59563"}]
+        },
+        {
+          "featureType": "water",
+          "elementType": "geometry",
+          "stylers": [{"color": "#17263c"}]
+        },
+        {
+          "featureType": "water",
+          "elementType": "labels.text.fill",
+          "stylers": [{"color": "#515c6d"}]
+        },
+        {
+          "featureType": "water",
+          "elementType": "labels.text.stroke",
+          "stylers": [{"color": "#17263c"}]
+        }
+      ]
+    ''');
   }
 
   // Step 4: Write Message
@@ -1023,36 +1413,36 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     // Media preview
                     memoryProvider.mediaItems.isEmpty
                         ? AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: _getCapsuleColor().withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: _getCapsuleColor().withOpacity(0.2),
-                                  width: 1,
+                      aspectRatio: 16 / 9,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _getCapsuleColor().withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _getCapsuleColor().withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.photo_library_outlined,
+                                size: 40,
+                                color: _getCapsuleColor(),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No media selected',
+                                style: TextStyle(
+                                  color: _getCapsuleColor(),
                                 ),
                               ),
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.photo_library_outlined,
-                                      size: 40,
-                                      color: _getCapsuleColor(),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'No media selected',
-                                      style: TextStyle(
-                                        color: _getCapsuleColor(),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                            ],
+                          ),
+                        ),
+                      ),
                           )
                         : MediaPreview(mediaItems: memoryProvider.mediaItems),
 
@@ -1191,8 +1581,61 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     );
     return capsule["name"];
   }
-  
+
   String _getCapsuleId() {
     return _selectedCapsule;
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+      });
+      return;
+    }
+    
+    setState(() {
+      _isSearching = true;
+    });
+    
+    try {
+      final results = await _locationService.searchPlaces(query);
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isSearching = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error searching: $e')),
+      );
+    }
+  }
+
+  Future<void> _selectPlace(PlaceData place) async {
+    // Clear search results
+    setState(() {
+      _searchResults = [];
+      _searchController.clear();
+    });
+    
+    // Use the coordinates directly from the place data
+    final geoPoint = GeoPoint(place.lat, place.lng);
+    
+    // Update map
+    final latLng = LatLng(place.lat, place.lng);
+    _setMarker(latLng);
+    
+    if (_mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(latLng, 15),
+      );
+    }
+    
+    // Update provider with location and address
+    final provider = Provider.of<MemoryProvider>(context, listen: false);
+    provider.setLocation(geoPoint, place.formattedAddress ?? place.name);
   }
 }
