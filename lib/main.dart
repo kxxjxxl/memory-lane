@@ -11,6 +11,7 @@ import 'features/map/screens/home_screen.dart';
 import 'features/theme/theme_provider.dart';
 import 'core/animations/page_transitions.dart';
 import 'features/navigation/screens/bottom_nav_controller.dart';
+import 'features/create_memory/providers/memory_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,8 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => app_auth.AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        // Add the MemoryProvider here
+        ChangeNotifierProvider(create: (_) => MemoryProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
@@ -71,7 +74,6 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
 class AnimatedSplash extends StatefulWidget {
   const AnimatedSplash({Key? key}) : super(key: key);
 

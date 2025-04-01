@@ -1,7 +1,11 @@
 // lib/features/create_memory/screens/time_capsule_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/theme_provider.dart';
+import '../providers/memory_provider.dart';
+import '../../../models/memory_capsule.dart';
+import '../widgets/media_widgets.dart';
 
 class TimeCapsuleScreen extends StatefulWidget {
   const TimeCapsuleScreen({Key? key}) : super(key: key);
@@ -52,6 +56,12 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   void initState() {
     super.initState();
     _messageController.addListener(_updateCharCount);
+    
+    // Initialize with empty message in provider
+    Future.microtask(() {
+      final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+      _messageController.text = memoryProvider.message;
+    });
   }
 
   @override
@@ -62,15 +72,23 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
 
   void _updateCharCount() {
     setState(() {
-      // Just to trigger a rebuild for character count
+      // Update message in provider
+      Provider.of<MemoryProvider>(context, listen: false)
+        .setMessage(_messageController.text);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final memoryProvider = Provider.of<MemoryProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
     final screenSize = MediaQuery.of(context).size;
+
+    // Set selected capsule in provider
+    Future.microtask(() {
+      memoryProvider.setCapsuleType(_selectedCapsule);
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -176,26 +194,46 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     child: _buildStepContent(_currentStep),
                   ),
 
+                  // Loading indicator or error message
+                  if (memoryProvider.isLoading)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  
+                  if (memoryProvider.error != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        memoryProvider.error!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+
                   // Navigation button
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(top: 8),
                     child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          if (_currentStep < _totalSteps - 1) {
-                            _currentStep++;
-                          } else {
-                            // Save capsule logic
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Memory capsule saved successfully!'),
-                              ),
-                            );
-                          }
-                        });
-                      },
+                      onPressed: memoryProvider.isLoading
+                          ? null
+                          : () async {
+                              setState(() {
+                                if (_currentStep < _totalSteps - 1) {
+                                  _currentStep++;
+                                } else {
+                                  // Save capsule logic
+                                  _saveMemoryCapsule(context);
+                                }
+                              });
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _getCapsuleColor().withOpacity(0.9),
                         foregroundColor: Colors.white,
@@ -221,6 +259,34 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _saveMemoryCapsule(BuildContext context) async {
+    final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+    
+    // Set location if it hasn't been set yet
+    if (memoryProvider.location.latitude == 0 && 
+        memoryProvider.location.longitude == 0) {
+      memoryProvider.setLocation(
+        const GeoPoint(37.7749, -122.4194), // Default to San Francisco
+        '123 Memory Lane, San Francisco',
+      );
+    }
+    
+    final memoryId = await memoryProvider.saveMemoryCapsule();
+    
+    if (memoryId != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Memory capsule saved successfully!'),
+        ),
+      );
+      
+      // Reset and navigate back
+      setState(() {
+        _currentStep = 0;
+      });
+    }
   }
 
   Widget _buildStepIndicator(int index) {
@@ -490,77 +556,47 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
 
   // Step 2: Select Media
   Widget _buildSelectMediaStep() {
+    final memoryProvider = Provider.of<MemoryProvider>(context);
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    
     return Column(
       children: [
-        // Photo/Video selection card
-        GestureDetector(
-          onTap: () {
-            // Handle photo/video selection
-          },
-          child: Container(
-            width: double.infinity,
-            height: 200,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  _getCapsuleColor().withOpacity(0.7),
-                  _getCapsuleColor(),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+        // Media selection buttons
+        Row(
+          children: [
+            Expanded(
+              child: _buildMediaButton(
+                icon: Icons.photo,
+                label: 'Photos',
+                color: Colors.blue,
+                onTap: () {
+                  memoryProvider.pickImages();
+                },
               ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: _getCapsuleColor().withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.add_photo_alternate,
-                    color: _getCapsuleColor(),
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Select photos or videos',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Tap to browse your gallery',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMediaButton(
+                icon: Icons.videocam,
+                label: 'Videos',
+                color: Colors.red,
+                onTap: () {
+                  memoryProvider.pickVideos();
+                },
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMediaButton(
+                icon: Icons.mic,
+                label: 'Audio',
+                color: Colors.green,
+                onTap: () {
+                  memoryProvider.pickAudio();
+                },
+              ),
+            ),
+          ],
         ),
 
         const SizedBox(height: 24),
@@ -569,71 +605,126 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Selected Items',
-              style: TextStyle(
+            Text(
+              'Selected Items (${memoryProvider.mediaItems.length})',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            TextButton(
-              onPressed: () {
-                // Clear selection logic
-              },
-              child: Text(
-                'Clear All',
-                style: TextStyle(
-                  color: _getCapsuleColor(),
-                  fontWeight: FontWeight.w500,
+            if (memoryProvider.mediaItems.isNotEmpty)
+              TextButton(
+                onPressed: () {
+                  memoryProvider.clearMedia();
+                },
+                child: Text(
+                  'Clear All',
+                  style: TextStyle(
+                    color: _getCapsuleColor(),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
 
         const SizedBox(height: 16),
 
-        // Selected media placeholder
+        // Selected media list
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Provider.of<ThemeProvider>(context).isDarkMode
-                  ? const Color(0xFF2A2A2A)
-                  : Colors.grey[100],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.grey[400]!.withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.photo_library_outlined,
-                    size: 40,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'No items selected yet',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 16,
+          child: memoryProvider.mediaItems.isEmpty
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? const Color(0xFF2A2A2A)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.grey[400]!.withOpacity(0.3),
+                      width: 1,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_library_outlined,
+                          size: 40,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No items selected yet',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : MediaGrid(
+                  mediaItems: memoryProvider.mediaItems,
+                  onRemove: (index) => memoryProvider.removeMediaItem(index),
+                ),
         ),
       ],
     );
   }
 
+  Widget _buildMediaButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Step 3: Set Location
   Widget _buildSetLocationStep() {
+    final memoryProvider = Provider.of<MemoryProvider>(context);
+    
     return Column(
       children: [
         // Map placeholder
@@ -734,7 +825,17 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
               elevation: 2,
             ),
             onPressed: () {
-              // Handle using current location
+              // Set default location for demo purposes
+              memoryProvider.setLocation(
+                const GeoPoint(37.7749, -122.4194), // Default to San Francisco
+                '123 Memory Lane, San Francisco',
+              );
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Current location selected'),
+                ),
+              );
             },
           ),
         ),
@@ -856,6 +957,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   // Step 5: Preview
   Widget _buildPreviewStep() {
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    final memoryProvider = Provider.of<MemoryProvider>(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -919,38 +1021,40 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Media preview
-                    AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _getCapsuleColor().withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _getCapsuleColor().withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.photo_library_outlined,
-                                size: 40,
-                                color: _getCapsuleColor(),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No media selected',
-                                style: TextStyle(
-                                  color: _getCapsuleColor(),
+                    memoryProvider.mediaItems.isEmpty
+                        ? AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: _getCapsuleColor().withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _getCapsuleColor().withOpacity(0.2),
+                                  width: 1,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.photo_library_outlined,
+                                      size: 40,
+                                      color: _getCapsuleColor(),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'No media selected',
+                                      style: TextStyle(
+                                        color: _getCapsuleColor(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          )
+                        : MediaPreview(mediaItems: memoryProvider.mediaItems),
 
                     const SizedBox(height: 20),
 
@@ -958,7 +1062,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: isDarkMode ? const Color(0xFF3A3A3A) : Colors.grey[100],
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -976,7 +1080,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                                   ),
                                 ),
                                 Text(
-                                  '123 Memory Lane, San Francisco',
+                                  memoryProvider.locationName.isEmpty
+                                      ? '123 Memory Lane, San Francisco'
+                                      : memoryProvider.locationName,
                                   style: TextStyle(
                                     color: Colors.grey[600],
                                     fontSize: 12,
@@ -1084,5 +1190,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       orElse: () => _capsuleTypes[0],
     );
     return capsule["name"];
+  }
+  
+  String _getCapsuleId() {
+    return _selectedCapsule;
   }
 }
