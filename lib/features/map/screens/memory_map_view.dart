@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../../../models/memory_capsule.dart';
 import '../../theme/theme_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../../../features/create_memory/widgets/base64_media_display.dart';
+import 'package:flutter/rendering.dart';
 
 class MemoryMapView extends StatefulWidget {
   const MemoryMapView({Key? key}) : super(key: key);
@@ -15,11 +17,14 @@ class MemoryMapView extends StatefulWidget {
   State<MemoryMapView> createState() => _MemoryMapViewState();
 }
 
-class _MemoryMapViewState extends State<MemoryMapView> {
+class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveClientMixin {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   bool _isLoading = true;
   String? _error;
+  
+  @override
+  bool get wantKeepAlive => true;
   
   // Default to a central location (will be overridden by user location)
   CameraPosition _initialCameraPosition = const CameraPosition(
@@ -35,12 +40,20 @@ class _MemoryMapViewState extends State<MemoryMapView> {
   
   @override
   void dispose() {
-    _mapController?.dispose();
+    if (_mapController != null) {
+      try {
+        _mapController!.dispose();
+      } catch (e) {
+        print('Error disposing map controller: $e');
+      }
+    }
     super.dispose();
   }
   
   // Load memories from Firestore
   Future<void> _loadMemories() async {
+    if (!mounted) return; 
+    
     setState(() {
       _isLoading = true;
       _error = null;
@@ -296,15 +309,16 @@ class _MemoryMapViewState extends State<MemoryMapView> {
                         height: 100,
                         margin: const EdgeInsets.only(right: 10),
                         decoration: BoxDecoration(
-                          color: _getCapsuleColor(memory.type).withOpacity(0.2),
                           borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            _getMediaIcon(mediaItem.type),
-                            size: 40,
-                            color: _getCapsuleColor(memory.type),
+                          border: Border.all(
+                            color: _getCapsuleColor(memory.type).withOpacity(0.4),
+                            width: 1,
                           ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Base64MediaPreview(
+                          mediaId: mediaItem.url,
+                          mediaType: mediaItem.type,
                         ),
                       );
                     },
@@ -315,28 +329,28 @@ class _MemoryMapViewState extends State<MemoryMapView> {
               const Spacer(),
               
               // View full memory button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate to memory details screen
-                    Navigator.pop(context);
-                    // Add navigation to full memory view here
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _getCapsuleColor(memory.type),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'View Full Memory',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
+              // SizedBox(
+              //   width: double.infinity,
+              //   child: ElevatedButton(
+              //     onPressed: () {
+              //       // Navigate to memory details screen
+              //       Navigator.pop(context);
+              //       // Add navigation to full memory view here
+              //     },
+              //     style: ElevatedButton.styleFrom(
+              //       backgroundColor: _getCapsuleColor(memory.type),
+              //       foregroundColor: Colors.white,
+              //       padding: const EdgeInsets.symmetric(vertical: 16),
+              //       shape: RoundedRectangleBorder(
+              //         borderRadius: BorderRadius.circular(12),
+              //       ),
+              //     ),
+              //     child: const Text(
+              //       'View Full Memory',
+              //       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         );
@@ -374,6 +388,7 @@ class _MemoryMapViewState extends State<MemoryMapView> {
   
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required by AutomaticKeepAliveClientMixin
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
     
     return Scaffold(
@@ -465,6 +480,8 @@ class _MemoryMapViewState extends State<MemoryMapView> {
                       myLocationButtonEnabled: true,
                       mapType: MapType.normal,
                       onMapCreated: (controller) {
+                        if (!mounted) return; // Safety check
+                        
                         setState(() {
                           _mapController = controller;
                           
@@ -634,7 +651,13 @@ class _MemoryMapViewState extends State<MemoryMapView> {
         id: 'mock-1',
         userId: 'mock-user',
         capsuleType: 'standard',
-        media: [],
+        media: [
+          MediaItem(
+            url: 'mock-image-1',
+            type: 'image',
+            fileName: 'mock-photo.jpg',
+          ),
+        ],
         location: const GeoPoint(47.5615, -52.7126), // St. John's
         locationName: "Water Street, St. John's, NL, Canada",
         message: "My first memory in downtown St. John's",
@@ -644,7 +667,18 @@ class _MemoryMapViewState extends State<MemoryMapView> {
         id: 'mock-2',
         userId: 'mock-user',
         capsuleType: 'birthday',
-        media: [],
+        media: [
+          MediaItem(
+            url: 'mock-image-2',
+            type: 'image',
+            fileName: 'birthday-photo.jpg',
+          ),
+          MediaItem(
+            url: 'mock-video-1',
+            type: 'video',
+            fileName: 'birthday-video.mp4',
+          ),
+        ],
         location: const GeoPoint(47.5701, -52.6819), // Signal Hill
         locationName: "Signal Hill, St. John's, NL, Canada",
         message: "Birthday celebration with a beautiful view!",
@@ -654,7 +688,18 @@ class _MemoryMapViewState extends State<MemoryMapView> {
         id: 'mock-3',
         userId: 'mock-user',
         capsuleType: 'travel',
-        media: [],
+        media: [
+          MediaItem(
+            url: 'mock-image-3',
+            type: 'image',
+            fileName: 'travel-photo.jpg',
+          ),
+          MediaItem(
+            url: 'mock-audio-1',
+            type: 'audio',
+            fileName: 'harbor-sounds.mp3',
+          ),
+        ],
         location: const GeoPoint(47.5649, -52.7093), // Harbour
         locationName: "Harbour Drive, St. John's, NL, Canada",
         message: "Watching ships in the harbor",

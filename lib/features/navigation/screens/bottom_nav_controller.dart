@@ -41,8 +41,8 @@ class _BottomNavControllerState extends State<BottomNavController> {
             label: 'Create',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.hourglass_empty),
-            label: 'View',
+            icon: Icon(Icons.map),
+            label: 'Map',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.history),
