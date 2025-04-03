@@ -15,6 +15,7 @@ import 'features/create_memory/providers/memory_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
+import 'features/profile/providers/memory_history_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +65,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         // Add the MemoryProvider here
         ChangeNotifierProvider(create: (_) => MemoryProvider()),
+        ChangeNotifierProvider<MemoryHistoryProvider>(
+          create: (_) => MemoryHistoryProvider(),
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
