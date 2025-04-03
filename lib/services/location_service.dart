@@ -8,12 +8,19 @@ import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:js' as js;
-import 'dart:html' as html;
 
 class LocationService {
   // Get API key from .env
   static final String _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
   
+  // Helper method to wait for Google Maps API to load on web
+  Future<void> _waitForGoogleMaps() async {
+    if (!kIsWeb) return;
+    while (!js.context.hasProperty('googleMapsLoaded') || js.context['googleMapsLoaded'] != true) {
+      await Future.delayed(Duration(milliseconds: 100));
+    }
+  }
+
   // Request location permission and get the current position
   Future<GeoPoint?> getCurrentLocation() async {
     bool serviceEnabled;
@@ -57,19 +64,33 @@ class LocationService {
   // Get address from coordinates
   Future<String> getAddressFromCoordinates(GeoPoint coordinates) async {
     if (kIsWeb) {
-      // Mock data for web development - St. John's addresses
-      final lat = coordinates.latitude;
-      final lng = coordinates.longitude;
-      
-      // Basic proximity check to return mock addresses in St. John's
-      if ((lat - 47.5615).abs() < 0.01 && (lng - (-52.7126)).abs() < 0.01) {
-        return "123 Water Street, St. John's, NL A1C 1A5, Canada";
-      } else if ((lat - 47.5649).abs() < 0.01 && (lng - (-52.7093)).abs() < 0.01) {
-        return "45 Harbour Drive, St. John's, NL A1C 6N6, Canada";
-      } else if ((lat - 47.5701).abs() < 0.01 && (lng - (-52.6819)).abs() < 0.01) {
-        return "Signal Hill National Historic Site, St. John's, NL A1A, Canada";
-      } else {
-        return "Custom Location in St. John's at ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}";
+      // Use Google Maps JavaScript API Geocoder for web
+      try {
+        // Wait for Google Maps API to load
+        await _waitForGoogleMaps();
+
+        // Check if the getAddressFromCoordinates function is available
+        if (!js.context.hasProperty('getAddressFromCoordinates')) {
+          debugPrint('getAddressFromCoordinates function not found in JavaScript context');
+          return 'Lat: ${coordinates.latitude.toStringAsFixed(4)}, '
+              'Lng: ${coordinates.longitude.toStringAsFixed(4)}';
+        }
+
+        final completer = Completer<String>();
+        
+        js.context.callMethod('getAddressFromCoordinates', [
+          coordinates.latitude,
+          coordinates.longitude,
+          js.allowInterop((String address) {
+            completer.complete(address);
+          }),
+        ]);
+        
+        return await completer.future;
+      } catch (e) {
+        debugPrint('Error getting address on web: $e');
+        return 'Lat: ${coordinates.latitude.toStringAsFixed(4)}, '
+            'Lng: ${coordinates.longitude.toStringAsFixed(4)}';
       }
     } else {
       // Original mobile implementation
@@ -126,11 +147,12 @@ class LocationService {
         ),
       ];
     } else {
-      // Mobile implementation (keep this as is)
+      // Mobile implementation using HTTP request
       try {
+        final encodedQuery = Uri.encodeQueryComponent(query);
         final response = await http.get(
           Uri.parse(
-            'https://maps.googleapis.com/maps/api/place/textsearch/json?query=$query&key=$_apiKey'
+            'https://maps.googleapis.com/maps/api/place/textsearch/json?query=$encodedQuery&key=$_apiKey'
           ),
         );
         
@@ -139,9 +161,14 @@ class LocationService {
           if (data['status'] == 'OK') {
             final results = data['results'] as List;
             return results.map((place) => PlaceData.fromJson(place)).toList();
+          } else {
+            debugPrint('Places API error: ${data['status']} - ${data['error_message']}');
+            return [];
           }
+        } else {
+          debugPrint('HTTP error: ${response.statusCode} - ${response.body}');
+          return [];
         }
-        return [];
       } catch (e) {
         debugPrint('Error searching places: $e');
         return [];
@@ -213,14 +240,4 @@ class PlaceData {
       lng: json['geometry']['location']['lng'],
     );
   }
-  
-  factory PlaceData.fromJsObject(dynamic jsObject) {
-    return PlaceData(
-      placeId: jsObject['place_id'],
-      name: jsObject['name'],
-      formattedAddress: jsObject['formatted_address'],
-      lat: jsObject['geometry']['location']['lat'],
-      lng: jsObject['geometry']['location']['lng'],
-    );
-  }
-} 
+}
