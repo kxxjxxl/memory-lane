@@ -56,6 +56,9 @@ class MemoryCapsule {
     this.lastUpdatedAt,
   });
 
+  String get type => capsuleType;
+  List<MediaItem> get mediaItems => media;
+
   Map<String, dynamic> toJson() {
     return {
       'userId': userId,
