@@ -106,178 +106,204 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     final isDarkMode = themeProvider.isDarkMode;
     final screenSize = MediaQuery.of(context).size;
 
-    // Set selected capsule in provider
-    Future.microtask(() {
-      memoryProvider.setCapsuleType(_selectedCapsule);
-    });
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Memory'),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        leading: _currentStep > 0
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
+    return WillPopScope(
+      onWillPop: () async {
+        if (_currentStep > 0) {
+          await _handleBackNavigation();
+          return false; // Don't let the system handle the back button
+        }
+        return true; // Let the system handle the back button
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Create Memory'),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          leading: _currentStep > 0
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _handleBackNavigation,
+                )
+              : null,
+          actions: [
+            // Add Cancel button if we're in the memory creation flow
+            if (_currentStep > 0)
+              TextButton(
                 onPressed: () {
-                  setState(() {
-                    _currentStep--;
-                  });
+                  final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+                  
+                  if (_hasUnsavedChanges(memoryProvider)) {
+                    _showUnsavedChangesDialog().then((shouldDiscard) {
+                      if (shouldDiscard) {
+                        // Reset all data and go back to step 0
+                        memoryProvider.reset();
+                        setState(() {
+                          _currentStep = 0;
+                        });
+                      }
+                    });
+                  } else {
+                    // No changes, just go back to step 0
+                    setState(() {
+                      _currentStep = 0;
+                    });
+                  }
                 },
-              )
-            : null,
-        actions: [
-          // Theme toggle button
-          IconButton(
-            icon: Icon(
-              themeProvider.isDarkMode
-                  ? Icons.wb_sunny_outlined
-                  : Icons.nights_stay_outlined,
-            ),
-            onPressed: () {
-              themeProvider.toggleTheme();
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Steps indicator
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-            child: Container(
-              height: 80,
-              decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                child: const Text('Cancel'),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(
-                    _totalSteps,
-                    (index) => Tooltip(
-                      message: _getStepTitle(index),
-                      child: _buildStepIndicator(index),
+            
+            // Theme toggle button
+            IconButton(
+              icon: Icon(
+                themeProvider.isDarkMode
+                    ? Icons.wb_sunny_outlined
+                    : Icons.nights_stay_outlined,
+              ),
+              onPressed: () {
+                themeProvider.toggleTheme();
+              },
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // Steps indicator
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+              child: Container(
+                height: 80,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(
+                      _totalSteps,
+                      (index) => Tooltip(
+                        message: _getStepTitle(index),
+                        child: _buildStepIndicator(index),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          // Main content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Step title and description
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getStepTitle(_currentStep),
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: isDarkMode ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _getStepDescription(_currentStep),
-                          style: TextStyle(
-                            fontSize: 16,
-                            color:
-                                isDarkMode ? Colors.white70 : Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Main content area
-                  Expanded(
-                    child: _buildStepContent(_currentStep),
-                  ),
-
-                  // Loading indicator or error message
-                  if (memoryProvider.isLoading)
+            // Main content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20.0, 0.0, 20.0, 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Step title and description
                     Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: const Center(
-                        child: CircularProgressIndicator(),
+                      margin: const EdgeInsets.only(bottom: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _getStepTitle(_currentStep),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _getStepDescription(_currentStep),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color:
+                                  isDarkMode ? Colors.white70 : Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  
-                  if (memoryProvider.error != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        memoryProvider.error!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                  ),
 
-                  // Navigation button
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(top: 8),
-                    child: ElevatedButton(
-                      onPressed: memoryProvider.isLoading
-                          ? null
-                          : () async {
-                        setState(() {
-                          if (_currentStep < _totalSteps - 1) {
-                            _currentStep++;
-                          } else {
-                            // Save capsule logic
-                                  _saveMemoryCapsule(context);
-                          }
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _getCapsuleColor().withOpacity(0.9),
-                        foregroundColor: Colors.white,
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    // Main content area
+                    Expanded(
+                      child: _buildStepContent(_currentStep),
+                    ),
+
+                    // Loading indicator or error message
+                    if (memoryProvider.isLoading)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: const Center(
+                          child: CircularProgressIndicator(),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      child: Text(
-                        _currentStep == _totalSteps - 1
-                            ? 'Save Memory'
-                            : 'Continue',
-                        style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w600),
+                    
+                    if (memoryProvider.error != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          memoryProvider.error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                    ),
+
+                    // Navigation button
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(top: 8),
+                      child: ElevatedButton(
+                        onPressed: memoryProvider.isLoading
+                            ? null
+                            : () async {
+                          setState(() {
+                            if (_currentStep < _totalSteps - 1) {
+                              _currentStep++;
+                            } else {
+                              // Save capsule logic
+                                    _saveMemoryCapsule(context);
+                            }
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _getCapsuleColor().withOpacity(0.9),
+                          foregroundColor: Colors.white,
+                          elevation: 3,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: Text(
+                          _currentStep == _totalSteps - 1
+                              ? 'Save Memory'
+                              : 'Continue',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -482,9 +508,27 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
 
           return GestureDetector(
             onTap: () {
-              setState(() {
-                _selectedCapsule = capsule["id"];
-              });
+              // Get the memory provider
+              final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+              
+              // Check if we're changing to a different capsule type and have unsaved changes
+              if (_selectedCapsule != capsule["id"] && _hasUnsavedChanges(memoryProvider)) {
+                // Show confirmation dialog
+                _showUnsavedChangesDialog().then((shouldDiscard) {
+                  if (shouldDiscard) {
+                    // User confirmed, reset data and change capsule
+                    setState(() {
+                      _selectedCapsule = capsule["id"];
+                      memoryProvider.reset(); // Reset all data
+                    });
+                  }
+                });
+              } else {
+                // No unsaved changes or same capsule, just update the selection
+                setState(() {
+                  _selectedCapsule = capsule["id"];
+                });
+              }
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -1637,5 +1681,67 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     // Update provider with location and address
     final provider = Provider.of<MemoryProvider>(context, listen: false);
     provider.setLocation(geoPoint, place.formattedAddress ?? place.name);
+  }
+
+  // Add this method to check if memory has unsaved changes
+  bool _hasUnsavedChanges(MemoryProvider memoryProvider) {
+    // Check if any data has been set
+    bool hasMedia = memoryProvider.mediaItems.isNotEmpty;
+    bool hasLocation = memoryProvider.location.latitude != 0 || 
+                       memoryProvider.location.longitude != 0;
+    bool hasMessage = memoryProvider.message.isNotEmpty;
+    
+    return hasMedia || hasLocation || hasMessage;
+  }
+
+  // Show confirmation dialog for unsaved changes
+  Future<bool> _showUnsavedChangesDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text(
+          'You have unsaved changes that will be lost if you go back. '
+          'Do you want to continue?'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('DISCARD'),
+          ),
+        ],
+      ),
+    ) ?? false; // Default to false if dialog is dismissed
+  }
+
+  // Handle back navigation with confirmation if needed
+  Future<void> _handleBackNavigation() async {
+    final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+    
+    // If we're at step 0, just pop the screen
+    if (_currentStep == 0) {
+      Navigator.of(context).pop();
+      return;
+    }
+    
+    // If we're going back to step 0 (capsule selection) and have unsaved changes, confirm
+    if (_currentStep == 1 && _hasUnsavedChanges(memoryProvider)) {
+      bool shouldDiscard = await _showUnsavedChangesDialog();
+      if (!shouldDiscard) {
+        return; // User cancelled, don't navigate back
+      }
+      
+      // User confirmed discard, reset all data
+      memoryProvider.reset();
+    }
+    
+    // Navigate back one step
+    setState(() {
+      _currentStep--;
+    });
   }
 }

@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -31,82 +18,47 @@
 
   <title>memory_lane</title>
   <link rel="manifest" href="manifest.json">
-  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places" id="google-maps-api"></script>
-  
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
   <script>
+    // This function will be called from Flutter code to get the API key
+    function getGoogleMapsApiKey() {
+      return window.googleMapsApiKey;
+    }
+
     // Global Google Maps variables
-    var placesService;
     var geocoder;
-    
-    // Initialize services when the page loads
-    window.addEventListener('load', function() {
-      // Create a dummy div for PlacesService (required by API)
-      var dummyMapDiv = document.createElement('div');
-      dummyMapDiv.style.display = 'none';
-      document.body.appendChild(dummyMapDiv);
-      
-      // Initialize a map (required for PlacesService)
-      var dummyMap = new google.maps.Map(dummyMapDiv);
-      
-      // Initialize Places service
-      placesService = new google.maps.places.PlacesService(dummyMap);
-      
+    var googleMapsLoaded = false;
+
+    // Load the Google Maps API dynamically after Flutter initializes
+    window.addEventListener('flutter-first-frame', function() {
+      if (window.googleMapsApiKey) {
+        var script = document.createElement('script');
+        script.src = 'https://maps.googleapis.com/maps/api/js?key=' + window.googleMapsApiKey + '&callback=initGoogleMaps';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+    });
+
+    // Callback function to initialize Google Maps services
+    function initGoogleMaps() {
       // Initialize Geocoder
       geocoder = new google.maps.Geocoder();
-    });
-    
-    // Function to search places from Dart
-    function webSearchPlaces(query, callback) {
-      if (!placesService) {
-        console.error('Places service not initialized');
-        callback([]);
-        return;
-      }
-      
-      placesService.textSearch({
-        query: query
-      }, function(results, status) {
-        if (status === google.maps.places.PlacesServiceStatus.OK) {
-          callback(results);
-        } else {
-          console.error('Places search failed:', status);
-          callback([]);
-        }
-      });
+
+      // Set a flag to indicate that the API is loaded
+      googleMapsLoaded = true;
     }
-    
-    // Function to get coordinates from place ID
-    function webGetCoordinatesFromPlaceId(placeId, callback) {
-      if (!placesService) {
-        console.error('Places service not initialized');
-        callback(null);
-        return;
-      }
-      
-      placesService.getDetails({
-        placeId: placeId,
-        fields: ['geometry']
-      }, function(place, status) {
-        if (status === google.maps.places.PlacesServiceStatus.OK) {
-          callback({
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng()
-          });
-        } else {
-          console.error('Get place details failed:', status);
-          callback(null);
-        }
-      });
-    }
-    
+
     // Function to get address from coordinates
-    function webGetAddressFromCoordinates(lat, lng, callback) {
-      if (!geocoder) {
+    function getAddressFromCoordinates(lat, lng, callback) {
+      if (!googleMapsLoaded || !geocoder) {
         console.error('Geocoder not initialized');
         callback(`Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`);
         return;
       }
-      
+
       geocoder.geocode({
         location: { lat: lat, lng: lng }
       }, function(results, status) {
@@ -118,40 +70,6 @@
         }
       });
     }
-  </script>
-</head>
-<body>
-  <script src="flutter_bootstrap.js" async></script>
-  <script>
-    // This function will be called from Flutter code
-    function getGoogleMapsApiKey() {
-      return window.googleMapsApiKey;
-    }
-  </script>
-  <script id="google-maps" async defer></script>
-
-  <!-- Add this script to set the API key from Flutter -->
-  <script>
-    // Fetch the API key from Flutter and load the Maps API script
-    window.addEventListener('flutter-first-frame', function() {
-      if (window.googleMapsApiKey) {
-        var script = document.createElement('script');
-        script.src = 'https://maps.googleapis.com/maps/api/js?key=' + window.googleMapsApiKey + '&libraries=places';
-        script.async = true;
-        script.defer = true;
-        script.onload = function() {
-          // Initialize services
-          var dummyMapDiv = document.createElement('div');
-          dummyMapDiv.style.display = 'none';
-          document.body.appendChild(dummyMapDiv);
-          
-          var dummyMap = new google.maps.Map(dummyMapDiv);
-          placesService = new google.maps.places.PlacesService(dummyMap);
-          geocoder = new google.maps.Geocoder();
-        };
-        document.head.appendChild(script);
-      }
-    });
   </script>
 </body>
 </html>
