@@ -48,6 +48,13 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.8
 
+  # New dependencies
+  geocoding: ^2.2.0
+  http: ^1.2.1
+
+  # Added from the code block
+  flutter_dotenv: ^5.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -58,6 +65,7 @@ flutter:
 
   assets:
     - assets/images/
+    - .env
 
 
   # Uncomment and add fonts if needed
