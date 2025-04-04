@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../widgets/privacy_selector.dart';
 
 class TimeCapsuleScreen extends StatefulWidget {
   const TimeCapsuleScreen({Key? key}) : super(key: key);
@@ -24,10 +25,12 @@ class TimeCapsuleScreen extends StatefulWidget {
 
 class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   int _currentStep = 0;
-  final int _totalSteps = 5;
+  final int _totalSteps = 6;
 
   // Selected capsule type (default: standard)
   String _selectedCapsule = "standard";
+  // Selected privacy setting (default: private)
+  MemoryPrivacy _selectedPrivacy = MemoryPrivacy.private;
 
   // For text editing in message step
   final TextEditingController _messageController = TextEditingController();
@@ -63,7 +66,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   final LocationService _locationService = LocationService();
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-  final LatLng _defaultLocation = const LatLng(37.7749, -122.4194); // San Francisco as default
+  final LatLng _defaultLocation =
+      const LatLng(37.7749, -122.4194); // San Francisco as default
 
   final TextEditingController _searchController = TextEditingController();
   List<PlaceData> _searchResults = [];
@@ -75,10 +79,11 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   void initState() {
     super.initState();
     _messageController.addListener(_updateCharCount);
-    
+
     // Initialize with empty message in provider
     Future.microtask(() {
-      final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+      final memoryProvider =
+          Provider.of<MemoryProvider>(context, listen: false);
       _messageController.text = memoryProvider.message;
     });
   }
@@ -95,7 +100,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     setState(() {
       // Update message in provider
       Provider.of<MemoryProvider>(context, listen: false)
-        .setMessage(_messageController.text);
+          .setMessage(_messageController.text);
     });
   }
 
@@ -131,8 +136,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
             if (_currentStep > 0)
               TextButton(
                 onPressed: () {
-                  final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
-                  
+                  final memoryProvider =
+                      Provider.of<MemoryProvider>(context, listen: false);
+
                   if (_hasUnsavedChanges(memoryProvider)) {
                     _showUnsavedChangesDialog().then((shouldDiscard) {
                       if (shouldDiscard) {
@@ -152,7 +158,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                 },
                 child: const Text('Cancel'),
               ),
-            
+
             // Theme toggle button
             IconButton(
               icon: Icon(
@@ -227,8 +233,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                             _getStepDescription(_currentStep),
                             style: TextStyle(
                               fontSize: 16,
-                              color:
-                                  isDarkMode ? Colors.white70 : Colors.grey[600],
+                              color: isDarkMode
+                                  ? Colors.white70
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -248,7 +255,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                           child: CircularProgressIndicator(),
                         ),
                       ),
-                    
+
                     if (memoryProvider.error != null)
                       Container(
                         margin: const EdgeInsets.only(bottom: 8),
@@ -261,7 +268,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                           memoryProvider.error!,
                           style: const TextStyle(color: Colors.red),
                         ),
-                    ),
+                      ),
 
                     // Navigation button
                     Container(
@@ -271,15 +278,15 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                         onPressed: memoryProvider.isLoading
                             ? null
                             : () async {
-                          setState(() {
-                            if (_currentStep < _totalSteps - 1) {
-                              _currentStep++;
-                            } else {
-                              // Save capsule logic
+                                setState(() {
+                                  if (_currentStep < _totalSteps - 1) {
+                                    _currentStep++;
+                                  } else {
+                                    // Save capsule logic
                                     _saveMemoryCapsule(context);
-                            }
-                          });
-                        },
+                                  }
+                                });
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _getCapsuleColor().withOpacity(0.9),
                           foregroundColor: Colors.white,
@@ -310,25 +317,28 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
 
   Future<void> _saveMemoryCapsule(BuildContext context) async {
     final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
-    
+
     // Set location if it hasn't been set yet
-    if (memoryProvider.location.latitude == 0 && 
+    if (memoryProvider.location.latitude == 0 &&
         memoryProvider.location.longitude == 0) {
       memoryProvider.setLocation(
         const GeoPoint(37.7749, -122.4194), // Default to San Francisco
         '123 Memory Lane, San Francisco',
       );
     }
-    
+
+    // Set the privacy setting
+    memoryProvider.setPrivacy(_selectedPrivacy);
+
     final memoryId = await memoryProvider.saveMemoryCapsule();
-    
+
     if (memoryId != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Memory capsule saved successfully!'),
         ),
       );
-      
+
       // Reset and navigate back
       setState(() {
         _currentStep = 0;
@@ -351,55 +361,55 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         }
       },
       child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Step number or check
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Step number or check
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: isActive ? _getCapsuleColor() : Colors.grey[300],
-            shape: BoxShape.circle,
-            boxShadow: isCurrent
-                ? [
-                    BoxShadow(
-                      color: _getCapsuleColor().withOpacity(0.3),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    )
-                  ]
-                : null,
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isActive ? _getCapsuleColor() : Colors.grey[300],
+              shape: BoxShape.circle,
+              boxShadow: isCurrent
+                  ? [
+                      BoxShadow(
+                        color: _getCapsuleColor().withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ]
+                  : null,
               border: index <= _currentStep
                   ? Border.all(color: Colors.white, width: 2)
-                : null,
+                  : null,
+            ),
+            child: Center(
+              child: isCompleted
+                  ? const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 20,
+                    )
+                  : Icon(
+                      _getIconForStep(index),
+                      color: Colors.white,
+                      size: 20,
+                    ),
+            ),
           ),
-          child: Center(
-            child: isCompleted
-                ? const Icon(
-                    Icons.check,
-                    color: Colors.white,
-                    size: 20,
-                  )
-                : Icon(
-                    _getIconForStep(index),
-                    color: Colors.white,
-                    size: 20,
-                  ),
-          ),
-        ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
 
-        // Step label
-        Text(
-          _getStepShortLabel(index),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            color: isActive ? _getCapsuleColor() : Colors.grey,
+          // Step label
+          Text(
+            _getStepShortLabel(index),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              color: isActive ? _getCapsuleColor() : Colors.grey,
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -415,6 +425,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       case 3:
         return "Message";
       case 4:
+        return "Privacy";
+      case 5:
         return "Preview";
       default:
         return "";
@@ -431,7 +443,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         return Icons.location_on;
       case 3: // Write message
         return Icons.message;
-      case 4: // Preview
+      case 4: // Set privacy
+        return Icons.lock_outline;
+      case 5: // Preview
         return Icons.visibility;
       default:
         return Icons.circle;
@@ -449,6 +463,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       case 3:
         return "Write Message";
       case 4:
+        return "Set Privacy";
+      case 5:
         return "Preview Capsule";
       default:
         return "";
@@ -466,6 +482,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       case 3:
         return "Add a personal message";
       case 4:
+        return "Choose who can see your memory";
+      case 5:
         return "Review your memory before saving";
       default:
         return "";
@@ -483,6 +501,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       case 3:
         return _buildWriteMessageStep();
       case 4:
+        return _buildSetPrivacyStep();
+      case 5:
         return _buildPreviewStep();
       default:
         return Container();
@@ -509,10 +529,12 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
           return GestureDetector(
             onTap: () {
               // Get the memory provider
-              final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
-              
+              final memoryProvider =
+                  Provider.of<MemoryProvider>(context, listen: false);
+
               // Check if we're changing to a different capsule type and have unsaved changes
-              if (_selectedCapsule != capsule["id"] && _hasUnsavedChanges(memoryProvider)) {
+              if (_selectedCapsule != capsule["id"] &&
+                  _hasUnsavedChanges(memoryProvider)) {
                 // Show confirmation dialog
                 _showUnsavedChangesDialog().then((shouldDiscard) {
                   if (shouldDiscard) {
@@ -623,7 +645,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   Widget _buildSelectMediaStep() {
     final memoryProvider = Provider.of<MemoryProvider>(context);
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-    
+
     return Column(
       children: [
         // Media selection buttons
@@ -634,7 +656,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                 icon: Icons.photo,
                 label: 'Photos',
                 color: Colors.blue,
-          onTap: () {
+                onTap: () {
                   memoryProvider.pickImages();
                 },
               ),
@@ -659,9 +681,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                 onTap: () {
                   memoryProvider.pickAudio();
                 },
-                  ),
-                ),
-              ],
+              ),
+            ),
+          ],
         ),
 
         const SizedBox(height: 24),
@@ -678,18 +700,18 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
               ),
             ),
             if (memoryProvider.mediaItems.isNotEmpty)
-            TextButton(
-              onPressed: () {
+              TextButton(
+                onPressed: () {
                   memoryProvider.clearMedia();
-              },
-              child: Text(
-                'Clear All',
-                style: TextStyle(
-                  color: _getCapsuleColor(),
-                  fontWeight: FontWeight.w500,
+                },
+                child: Text(
+                  'Clear All',
+                  style: TextStyle(
+                    color: _getCapsuleColor(),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
 
@@ -699,41 +721,40 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         Expanded(
           child: memoryProvider.mediaItems.isEmpty
               ? Container(
-            decoration: BoxDecoration(
-                    color: isDarkMode
-                  ? const Color(0xFF2A2A2A)
-                  : Colors.grey[100],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.grey[400]!.withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.photo_library_outlined,
-                    size: 40,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'No items selected yet',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 16,
+                  decoration: BoxDecoration(
+                    color:
+                        isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.grey[400]!.withOpacity(0.3),
+                      width: 1,
                     ),
                   ),
-                ],
-              ),
-            ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_library_outlined,
+                          size: 40,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No items selected yet',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 )
               : MediaGrid(
                   mediaItems: memoryProvider.mediaItems,
                   onRemove: (index) => memoryProvider.removeMediaItem(index),
-          ),
+                ),
         ),
       ],
     );
@@ -747,9 +768,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-            child: Container(
+      child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
+        decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
@@ -759,8 +780,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
+          children: [
+            Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.2),
@@ -790,43 +811,43 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   Widget _buildSetLocationStep() {
     final memoryProvider = Provider.of<MemoryProvider>(context);
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-    
+
     // Convert GeoPoint to LatLng if a location is already set
-    LatLng _currentLocation = memoryProvider.location.latitude != 0 
-        ? LatLng(memoryProvider.location.latitude, memoryProvider.location.longitude)
+    LatLng _currentLocation = memoryProvider.location.latitude != 0
+        ? LatLng(
+            memoryProvider.location.latitude, memoryProvider.location.longitude)
         : _defaultLocation;
-    
+
     // Update markers when location changes
     _updateMarkers(_currentLocation);
-    
+
     return Column(
       children: [
         // Map with Google Maps
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
+            child: Stack(
+              children: [
                 // Conditionally render Google Maps based on platform
                 if (kIsWeb)
                   // For web, use a fallback map image with a marker
                   Stack(
                     children: [
                       // Static map image
-                  Container(
+                      Container(
                         decoration: BoxDecoration(
-                      image: DecorationImage(
-                        image: NetworkImage(
-                              'https://maps.googleapis.com/maps/api/staticmap?'
-                              'center=${_currentLocation.latitude},${_currentLocation.longitude}'
-                              '&zoom=14&size=600x400&markers=color:red|'
-                              '${_currentLocation.latitude},${_currentLocation.longitude}'
-                              '&key=${dotenv.env['GOOGLE_MAPS_API_KEY']}'
-                            ),
-                        fit: BoxFit.cover,
+                          image: DecorationImage(
+                            image: NetworkImage(
+                                'https://maps.googleapis.com/maps/api/staticmap?'
+                                'center=${_currentLocation.latitude},${_currentLocation.longitude}'
+                                '&zoom=14&size=600x400&markers=color:red|'
+                                '${_currentLocation.latitude},${_currentLocation.longitude}'
+                                '&key=${dotenv.env['GOOGLE_MAPS_API_KEY']}'),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
 
                       // Tap listener for web
                       GestureDetector(
@@ -866,118 +887,124 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     },
                   ),
 
-                  // Search bar at top
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    right: 16,
-                    child: Column(
-                      children: [
-                        // Search bar
+                // Search bar at top
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Column(
+                    children: [
+                      // Search bar
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                decoration: const InputDecoration(
+                                  hintText: 'Search for a location',
+                                  border: InputBorder.none,
+                                  hintStyle: TextStyle(color: Colors.grey),
+                                ),
+                                onChanged: (value) {
+                                  // Debounce search to avoid too many API calls
+                                  _debounce?.cancel();
+                                  _debounce = Timer(
+                                      const Duration(milliseconds: 500), () {
+                                    _searchPlaces(value);
+                                  });
+                                },
+                              ),
+                            ),
+                            if (_isSearching)
+                              const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            if (_searchController.text.isNotEmpty &&
+                                !_isSearching)
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.clear, color: Colors.grey),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchResults = [];
+                                  });
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      // Search results
+                      if (_searchResults.isNotEmpty)
                         Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                          margin: const EdgeInsets.only(top: 4),
+                          constraints: BoxConstraints(
+                            maxHeight: 300,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.search, color: Colors.grey),
-                          const SizedBox(width: 8),
-                              Expanded(
-                            child: TextField(
-                                  controller: _searchController,
-                                  decoration: const InputDecoration(
-                                hintText: 'Search for a location',
-                                border: InputBorder.none,
-                                hintStyle: TextStyle(color: Colors.grey),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
-                                  onChanged: (value) {
-                                    // Debounce search to avoid too many API calls
-                                    _debounce?.cancel();
-                                    _debounce = Timer(const Duration(milliseconds: 500), () {
-                                      _searchPlaces(value);
-                                    });
-                                  },
-                                ),
-                              ),
-                              if (_isSearching)
-                                const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              if (_searchController.text.isNotEmpty && !_isSearching)
-                                IconButton(
-                                  icon: const Icon(Icons.clear, color: Colors.grey),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {
-                                      _searchResults = [];
-                                    });
-                                  },
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                        
-                        // Search results
-                        if (_searchResults.isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            constraints: BoxConstraints(
-                              maxHeight: 300,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-                            child: ListView.separated(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              itemCount: _searchResults.length > 5 ? 5 : _searchResults.length,
-                              separatorBuilder: (context, index) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final place = _searchResults[index];
-                                return ListTile(
-                                  title: Text(place.name),
-                                  subtitle: Text(
-                                    place.formattedAddress ?? '',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  leading: const Icon(Icons.location_on),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
-                                  ),
-                                  dense: true,
-                                  onTap: () => _selectPlace(place),
-                                );
-                              },
-                            ),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: _searchResults.length > 5
+                                ? 5
+                                : _searchResults.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final place = _searchResults[index];
+                              return ListTile(
+                                title: Text(place.name),
+                                subtitle: Text(
+                                  place.formattedAddress ?? '',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                leading: const Icon(Icons.location_on),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                dense: true,
+                                onTap: () => _selectPlace(place),
+                              );
+                            },
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
-                
+                ),
+
                 // Location info
                 if (memoryProvider.locationName.isNotEmpty)
                   Positioned(
@@ -994,9 +1021,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                             color: Colors.black.withOpacity(0.1),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+                          ),
+                        ],
+                      ),
                       child: Row(
                         children: [
                           Icon(
@@ -1049,7 +1076,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   void _showLocationPickerDialog() {
     final TextEditingController latController = TextEditingController();
     final TextEditingController lngController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -1064,7 +1091,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                   labelText: 'Latitude',
                   hintText: 'e.g. 37.7749',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -1073,7 +1101,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                   labelText: 'Longitude',
                   hintText: 'e.g. -122.4194',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
             ],
           ),
@@ -1083,13 +1112,13 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-            onPressed: () {
+              onPressed: () {
                 Navigator.pop(context);
-                
+
                 try {
                   final lat = double.parse(latController.text);
                   final lng = double.parse(lngController.text);
-                  
+
                   final latLng = LatLng(lat, lng);
                   _setMarker(latLng);
                   _updateLocationInProvider(latLng);
@@ -1114,7 +1143,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         Marker(
           markerId: const MarkerId('selected_location'),
           position: position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         ),
       };
     });
@@ -1127,11 +1157,12 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
         Marker(
           markerId: const MarkerId('selected_location'),
           position: position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         ),
       };
     });
-    
+
     // Move camera to the selected position
     _mapController?.animateCamera(
       CameraUpdate.newLatLng(position),
@@ -1142,10 +1173,10 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   Future<void> _updateLocationInProvider(LatLng latLng) async {
     final provider = Provider.of<MemoryProvider>(context, listen: false);
     final geoPoint = GeoPoint(latLng.latitude, latLng.longitude);
-    
+
     // Get address from coordinates
     final address = await _locationService.getAddressFromCoordinates(geoPoint);
-    
+
     // Update provider
     provider.setLocation(geoPoint, address);
   }
@@ -1153,21 +1184,21 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   // Get current location
   Future<void> _getCurrentLocation() async {
     final location = await _locationService.getCurrentLocation();
-    
+
     if (location != null) {
       final latLng = LatLng(location.latitude, location.longitude);
-      
+
       // Update UI with the new location
       _setMarker(latLng);
-      
+
       // Center map on the current location
       _mapController?.animateCamera(
         CameraUpdate.newLatLng(latLng),
       );
-      
+
       // Update provider
       _updateLocationInProvider(latLng);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Current location selected'),
@@ -1176,7 +1207,8 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not get current location. Please ensure location services are enabled.'),
+          content: Text(
+              'Could not get current location. Please ensure location services are enabled.'),
         ),
       );
     }
@@ -1370,6 +1402,126 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
     );
   }
 
+  // Step 5: Set Privacy
+  Widget _buildSetPrivacyStep() {
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Privacy selector
+                PrivacySelectorWidget(
+                  selectedPrivacy: _selectedPrivacy,
+                  onPrivacyChanged: (privacy) {
+                    setState(() {
+                      _selectedPrivacy = privacy;
+                    });
+                  },
+                  isDarkMode: isDarkMode,
+                ),
+
+                const SizedBox(height: 32),
+
+                // Privacy explanation
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'How does privacy work?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPrivacyInfoItem(
+                        isDarkMode: isDarkMode,
+                        title: 'Private memories',
+                        description:
+                            'Are only visible to you, no matter where other users are located',
+                        icon: Icons.lock_outline,
+                        iconColor: Colors.orange,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildPrivacyInfoItem(
+                        isDarkMode: isDarkMode,
+                        title: 'Public memories',
+                        description:
+                            'Are visible to all users who are within 5km of your memory location',
+                        icon: Icons.public,
+                        iconColor: Colors.green,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPrivacyInfoItem({
+    required bool isDarkMode,
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color iconColor,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: iconColor,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFormatButton(IconData icon, Color color, String tooltip) {
     return Tooltip(
       message: tooltip,
@@ -1457,36 +1609,36 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     // Media preview
                     memoryProvider.mediaItems.isEmpty
                         ? AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _getCapsuleColor().withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _getCapsuleColor().withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.photo_library_outlined,
-                                size: 40,
-                                color: _getCapsuleColor(),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No media selected',
-                                style: TextStyle(
-                                  color: _getCapsuleColor(),
+                            aspectRatio: 16 / 9,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: _getCapsuleColor().withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _getCapsuleColor().withOpacity(0.2),
+                                  width: 1,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.photo_library_outlined,
+                                      size: 40,
+                                      color: _getCapsuleColor(),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'No media selected',
+                                      style: TextStyle(
+                                        color: _getCapsuleColor(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           )
                         : MediaPreview(mediaItems: memoryProvider.mediaItems),
 
@@ -1496,7 +1648,9 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? const Color(0xFF3A3A3A) : Colors.grey[100],
+                        color: isDarkMode
+                            ? const Color(0xFF3A3A3A)
+                            : Colors.grey[100],
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -1573,6 +1727,75 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
 
                     const SizedBox(height: 20),
 
+                    // Privacy setting
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Privacy',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _selectedPrivacy == MemoryPrivacy.public
+                                ? Colors.green.withOpacity(0.1)
+                                : Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _selectedPrivacy == MemoryPrivacy.public
+                                  ? Colors.green.withOpacity(0.3)
+                                  : Colors.orange.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _selectedPrivacy.icon,
+                                color: _selectedPrivacy == MemoryPrivacy.public
+                                    ? Colors.green
+                                    : Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedPrivacy.displayName,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: _selectedPrivacy ==
+                                                MemoryPrivacy.public
+                                            ? Colors.green
+                                            : Colors.orange,
+                                      ),
+                                    ),
+                                    Text(
+                                      _selectedPrivacy.description,
+                                      style: TextStyle(
+                                        color: isDarkMode
+                                            ? Colors.white70
+                                            : Colors.black87,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
                     // Created date
                     Row(
                       children: [
@@ -1637,11 +1860,11 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _isSearching = true;
     });
-    
+
     try {
       final results = await _locationService.searchPlaces(query);
       setState(() {
@@ -1664,20 +1887,20 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
       _searchResults = [];
       _searchController.clear();
     });
-    
+
     // Use the coordinates directly from the place data
     final geoPoint = GeoPoint(place.lat, place.lng);
-    
+
     // Update map
     final latLng = LatLng(place.lat, place.lng);
     _setMarker(latLng);
-    
+
     if (_mapController != null) {
       _mapController!.animateCamera(
         CameraUpdate.newLatLngZoom(latLng, 15),
       );
     }
-    
+
     // Update provider with location and address
     final provider = Provider.of<MemoryProvider>(context, listen: false);
     provider.setLocation(geoPoint, place.formattedAddress ?? place.name);
@@ -1687,58 +1910,58 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
   bool _hasUnsavedChanges(MemoryProvider memoryProvider) {
     // Check if any data has been set
     bool hasMedia = memoryProvider.mediaItems.isNotEmpty;
-    bool hasLocation = memoryProvider.location.latitude != 0 || 
-                       memoryProvider.location.longitude != 0;
+    bool hasLocation = memoryProvider.location.latitude != 0 ||
+        memoryProvider.location.longitude != 0;
     bool hasMessage = memoryProvider.message.isNotEmpty;
-    
+
     return hasMedia || hasLocation || hasMessage;
   }
 
   // Show confirmation dialog for unsaved changes
   Future<bool> _showUnsavedChangesDialog() async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Unsaved Changes'),
-        content: const Text(
-          'You have unsaved changes that will be lost if you go back. '
-          'Do you want to continue?'
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('CANCEL'),
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Unsaved Changes'),
+            content: const Text(
+                'You have unsaved changes that will be lost if you go back. '
+                'Do you want to continue?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('CANCEL'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('DISCARD'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('DISCARD'),
-          ),
-        ],
-      ),
-    ) ?? false; // Default to false if dialog is dismissed
+        ) ??
+        false; // Default to false if dialog is dismissed
   }
 
   // Handle back navigation with confirmation if needed
   Future<void> _handleBackNavigation() async {
     final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
-    
+
     // If we're at step 0, just pop the screen
     if (_currentStep == 0) {
       Navigator.of(context).pop();
       return;
     }
-    
+
     // If we're going back to step 0 (capsule selection) and have unsaved changes, confirm
     if (_currentStep == 1 && _hasUnsavedChanges(memoryProvider)) {
       bool shouldDiscard = await _showUnsavedChangesDialog();
       if (!shouldDiscard) {
         return; // User cancelled, don't navigate back
       }
-      
+
       // User confirmed discard, reset all data
       memoryProvider.reset();
     }
-    
+
     // Navigate back one step
     setState(() {
       _currentStep--;
