@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Memories collection
+    match /memories/{memoryId} {
+      // Allow read if the memory is public OR if the memory belongs to the authenticated user
+      allow read: if request.auth != null && (
+        resource.data.privacy == 'public' || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Allow write operations only to authenticated users for their own memories
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // Default deny all other requests
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 
