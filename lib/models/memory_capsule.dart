@@ -1,5 +1,62 @@
 // lib/models/memory_capsule.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+
+// Define privacy enum values for type safety
+enum MemoryPrivacy {
+  private,
+  public,
+}
+
+// Extension to convert enum to string for Firestore storage
+extension MemoryPrivacyExtension on MemoryPrivacy {
+  String get value {
+    switch (this) {
+      case MemoryPrivacy.private:
+        return 'private';
+      case MemoryPrivacy.public:
+        return 'public';
+    }
+  }
+  
+  // Helper method for display name
+  String get displayName {
+    switch (this) {
+      case MemoryPrivacy.private:
+        return 'Private';
+      case MemoryPrivacy.public:
+        return 'Public';
+    }
+  }
+  
+  // Helper method for description
+  String get description {
+    switch (this) {
+      case MemoryPrivacy.private:
+        return 'Only visible to you';
+      case MemoryPrivacy.public:
+        return 'Visible to everyone within 5km';
+    }
+  }
+  
+  // Helper method for icon
+  IconData get icon {
+    switch (this) {
+      case MemoryPrivacy.private:
+        return Icons.lock_outline;
+      case MemoryPrivacy.public:
+        return Icons.public;
+    }
+  }
+}
+
+// Helper to convert string to enum
+MemoryPrivacy privacyFromString(String? value) {
+  if (value == 'public') {
+    return MemoryPrivacy.public;
+  }
+  return MemoryPrivacy.private; // Default to private
+}
 
 class MediaItem {
   final String url;
@@ -43,6 +100,7 @@ class MemoryCapsule {
   final String message;
   final DateTime createdAt;
   final DateTime? lastUpdatedAt;
+  final MemoryPrivacy privacy; // New privacy field
 
   MemoryCapsule({
     this.id,
@@ -54,6 +112,7 @@ class MemoryCapsule {
     required this.message,
     required this.createdAt,
     this.lastUpdatedAt,
+    this.privacy = MemoryPrivacy.private, // Default to private
   });
 
   String get type => capsuleType;
@@ -71,6 +130,7 @@ class MemoryCapsule {
       'lastUpdatedAt': lastUpdatedAt != null
           ? Timestamp.fromDate(lastUpdatedAt!)
           : null,
+      'privacy': privacy.value, // Store the string value
     };
   }
 
@@ -96,6 +156,7 @@ class MemoryCapsule {
       lastUpdatedAt: json['lastUpdatedAt'] != null
           ? (json['lastUpdatedAt'] as Timestamp).toDate()
           : null,
+      privacy: privacyFromString(json['privacy']), // Convert from string
     );
   }
 
@@ -109,6 +170,7 @@ class MemoryCapsule {
     String? message,
     DateTime? createdAt,
     DateTime? lastUpdatedAt,
+    MemoryPrivacy? privacy,
   }) {
     return MemoryCapsule(
       id: id ?? this.id,
@@ -120,6 +182,7 @@ class MemoryCapsule {
       message: message ?? this.message,
       createdAt: createdAt ?? this.createdAt,
       lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
+      privacy: privacy ?? this.privacy,
     );
   }
 }

@@ -1,3 +1,4 @@
+// lib/features/map/screens/memory_map_view.dart
 import 'dart:math'; 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -9,6 +10,8 @@ import '../../theme/theme_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../features/create_memory/widgets/base64_media_display.dart';
 import 'package:flutter/rendering.dart';
+import '../../../repositories/memory_repository.dart';
+import '../../../services/location_service.dart';
 
 class MemoryMapView extends StatefulWidget {
   const MemoryMapView({Key? key}) : super(key: key);
@@ -22,6 +25,10 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
   Set<Marker> _markers = {};
   bool _isLoading = true;
   String? _error;
+  final MemoryRepository _memoryRepository = MemoryRepository();
+  final LocationService _locationService = LocationService();
+  bool _showPublicMemories = true; // Toggle for showing public memories
+  GeoPoint _currentLocation = const GeoPoint(37.7749, -122.4194); // Default location
   
   @override
   bool get wantKeepAlive => true;
@@ -35,7 +42,7 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
   @override
   void initState() {
     super.initState();
-    _loadMemories();
+    _getCurrentLocation();
   }
   
   @override
@@ -48,6 +55,31 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
       }
     }
     super.dispose();
+  }
+
+  // Get current user location
+  Future<void> _getCurrentLocation() async {
+    try {
+      final currentLocation = await _locationService.getCurrentLocation();
+      if (currentLocation != null) {
+        setState(() {
+          _currentLocation = GeoPoint(
+            currentLocation.latitude,
+            currentLocation.longitude,
+          );
+          
+          _initialCameraPosition = CameraPosition(
+            target: LatLng(currentLocation.latitude, currentLocation.longitude),
+            zoom: 14,
+          );
+        });
+      }
+    } catch (e) {
+      print('Error getting current location: $e');
+    } finally {
+      // Load memories regardless of whether we got location
+      _loadMemories();
+    }
   }
   
   // Load memories from Firestore
@@ -69,19 +101,19 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
         return;
       }
       
-      // Get user's memories from Firestore
-      try {
-        final memoriesSnapshot = await FirebaseFirestore.instance
-            .collection('memories')
-            .where('userId', isEqualTo: user.uid)
-            .get();
-        
-        // Convert to memory capsules
-        final memories = memoriesSnapshot.docs.map((doc) {
-          final data = doc.data();
-          return MemoryCapsule.fromJson(data, doc.id);
-        }).toList();
-        
+      // Get user's own memories and public memories within radius
+      Stream<List<MemoryCapsule>> memoriesStream;
+      
+      if (_showPublicMemories) {
+        // Get both user's memories and nearby public memories
+        memoriesStream = _memoryRepository.getNearbyMemories(_currentLocation);
+      } else {
+        // Get only user's memories
+        memoriesStream = _memoryRepository.getUserMemories();
+      }
+      
+      // Listen to the stream
+      memoriesStream.listen((memories) async {
         // Create markers for each memory
         Set<Marker> markers = {};
         for (var memory in memories) {
@@ -94,8 +126,15 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
           final marker = Marker(
             markerId: MarkerId(memory.id ?? 'memory_${DateTime.now().millisecondsSinceEpoch}'),
             position: LatLng(memory.location.latitude, memory.location.longitude),
+            // Use different colors for own vs. public memories
+            icon: await _getMarkerIcon(
+              memory.type, 
+              isUserMemory: memory.userId == user.uid
+            ),
             infoWindow: InfoWindow(
-              title: memory.type.capitalize(), 
+              title: memory.userId == user.uid 
+                  ? '${memory.type.capitalize()} (Mine)' 
+                  : '${memory.type.capitalize()} (Public)',
               snippet: memory.message.isNotEmpty 
                   ? (memory.message.length > 30 
                       ? '${memory.message.substring(0, 30)}...' 
@@ -105,68 +144,70 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
                 _showMemoryDetails(memory);
               },
             ),
-            icon: await _getMarkerIcon(memory.type),
           );
           
           markers.add(marker);
         }
         
         // Update the markers
-        setState(() {
-          _markers = markers;
-          _isLoading = false;
-          
-          // If we have memories with locations, center the map on the first one
-          if (markers.isNotEmpty) {
-            final firstMarker = markers.first;
-            _initialCameraPosition = CameraPosition(
-              target: firstMarker.position,
-              zoom: 12,
-            );
-            
-            // Animate camera if map is already initialized
-            _mapController?.animateCamera(
-              CameraUpdate.newCameraPosition(_initialCameraPosition),
-            );
-          }
-        });
-      } catch (firestoreError) {
-        if (firestoreError.toString().contains('permission-denied')) {
+        if (mounted) {
           setState(() {
-            // Temporarily comment this out to not show the error
-            // _error = 'Firestore permission denied. Please check your Firebase security rules.';
-            // _isLoading = false;
+            _markers = markers;
+            _isLoading = false;
+            
+            // If we have memories with locations, center the map on the first one
+            if (markers.isNotEmpty && _mapController != null) {
+              _zoomToFitAllMarkers();
+            }
           });
-          print('Firestore permission error: $firestoreError');
-          
-          // Load mock data instead
-          await _loadMockMemories();
-        } else {
-          rethrow; // Re-throw for the outer catch block
         }
-      }
-    } catch (e) {
-      setState(() {
-        _error = e.toString().contains('permission-denied') 
-            ? 'Firebase permission error. Check security rules.' 
-            : 'Error loading memories: $e';
-        _isLoading = false;
+      }, onError: (e) {
+        if (mounted) {
+          setState(() {
+            _error = 'Error loading memories: $e';
+            _isLoading = false;
+          });
+        }
+        print('Error in memory stream: $e');
       });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Error: $e';
+          _isLoading = false;
+        });
+      }
       print('Error loading memories: $e');
     }
   }
   
   // Get a custom marker icon based on memory type
-  Future<BitmapDescriptor> _getMarkerIcon(String type) async {
-    switch (type.toLowerCase()) {
-      case 'birthday':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose);
-      case 'anniversary':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
-      case 'travel':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
-      default:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
+  Future<BitmapDescriptor> _getMarkerIcon(String type, {bool isUserMemory = true}) async {
+    // For user's own memories
+    if (isUserMemory) {
+      switch (type.toLowerCase()) {
+        case 'birthday':
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose);
+        case 'anniversary':
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
+        case 'travel':
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan);
+        default:
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
+      }
+    } 
+    // For public memories (using different colors)
+    else {
+      switch (type.toLowerCase()) {
+        case 'birthday':
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+        case 'anniversary':
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
+        case 'travel':
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+        default:
+          return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+      }
     }
   }
   
@@ -177,6 +218,9 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
   
   // Show memory details in a bottom sheet
   void _showMemoryDetails(MemoryCapsule memory) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isUserMemory = memory.userId == user?.uid;
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -200,13 +244,51 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    memory.type.capitalize(),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: _getCapsuleColor(memory.type),
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            memory.type.capitalize(),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: _getCapsuleColor(memory.type),
+                            ),
+                          ),
+                          if (!isUserMemory) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8, 
+                                vertical: 2
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Public',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (!isUserMemory)
+                        Text(
+                          'Created by another user',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                    ],
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -325,32 +407,6 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
                   ),
                 ),
               ],
-              
-              const Spacer(),
-              
-              // View full memory button
-              // SizedBox(
-              //   width: double.infinity,
-              //   child: ElevatedButton(
-              //     onPressed: () {
-              //       // Navigate to memory details screen
-              //       Navigator.pop(context);
-              //       // Add navigation to full memory view here
-              //     },
-              //     style: ElevatedButton.styleFrom(
-              //       backgroundColor: _getCapsuleColor(memory.type),
-              //       foregroundColor: Colors.white,
-              //       padding: const EdgeInsets.symmetric(vertical: 16),
-              //       shape: RoundedRectangleBorder(
-              //         borderRadius: BorderRadius.circular(12),
-              //       ),
-              //     ),
-              //     child: const Text(
-              //       'View Full Memory',
-              //       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              //     ),
-              //   ),
-              // ),
             ],
           ),
         );
@@ -372,20 +428,6 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
     }
   }
   
-  // Get icon for media type
-  IconData _getMediaIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'image':
-        return Icons.image;
-      case 'video':
-        return Icons.videocam;
-      case 'audio':
-        return Icons.audiotrack;
-      default:
-        return Icons.attachment;
-    }
-  }
-  
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required by AutomaticKeepAliveClientMixin
@@ -397,6 +439,22 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
+          // Privacy filter toggle
+          IconButton(
+            icon: Icon(
+              _showPublicMemories ? Icons.public : Icons.lock_outline,
+              color: _showPublicMemories ? Colors.green : Colors.orange,
+            ),
+            tooltip: _showPublicMemories 
+                ? 'Showing all memories (public + yours)' 
+                : 'Showing only your memories',
+            onPressed: () {
+              setState(() {
+                _showPublicMemories = !_showPublicMemories;
+                _loadMemories(); // Reload memories with new filter
+              });
+            },
+          ),
           // Refresh button
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -413,90 +471,146 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 60,
-                        color: Colors.red.withOpacity(0.7),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: _loadMemories,
-                        child: const Text('Try Again'),
-                      ),
-                    ],
-                  ),
-                )
-              : _markers.isEmpty
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.map_outlined,
-                            size: 80,
-                            color: isDarkMode ? Colors.white70 : Colors.blue,
+                            Icons.error_outline,
+                            size: 60,
+                            color: Colors.red.withOpacity(0.7),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _error!,
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white70 : Colors.black87,
+                            ),
                           ),
                           const SizedBox(height: 24),
-                          Text(
-                            'No memories found in your area',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 40),
-                            child: Text(
-                              'Create location-based memories to see them on the map',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: isDarkMode ? Colors.white70 : Colors.black54,
-                              ),
-                            ),
+                          ElevatedButton(
+                            onPressed: _loadMemories,
+                            child: const Text('Try Again'),
                           ),
                         ],
                       ),
                     )
-                  : GoogleMap(
-                      initialCameraPosition: _initialCameraPosition,
-                      markers: _markers,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
-                      mapType: MapType.normal,
-                      onMapCreated: (controller) {
-                        if (!mounted) return; // Safety check
+                  : _markers.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.map_outlined,
+                                size: 80,
+                                color: isDarkMode ? Colors.white70 : Colors.blue,
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                'No memories found in your area',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 40),
+                                child: Text(
+                                  'Create location-based memories to see them on the map',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : GoogleMap(
+                          initialCameraPosition: _initialCameraPosition,
+                          markers: _markers,
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: true,
+                          mapType: MapType.normal,
+                          onMapCreated: (controller) {
+                            if (!mounted) return; // Safety check
+                            
+                            setState(() {
+                              _mapController = controller;
+                              
+                              // Set map style based on theme
+                              if (isDarkMode) {
+                                controller.setMapStyle(_darkMapStyle);
+                              }
+                            });
+                          },
+                          padding: const EdgeInsets.only(bottom: 120),
+                        ),
                         
-                        setState(() {
-                          _mapController = controller;
-                          
-                          // Set map style based on theme
-                          if (isDarkMode) {
-                            controller.setMapStyle(_darkMapStyle);
-                          }
-                        });
-                      },
-                      padding: const EdgeInsets.only(bottom: 120),
+          // Filter info banner
+          if (!_isLoading && _markers.isNotEmpty)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDarkMode 
+                      ? Colors.grey[850]!.withOpacity(0.9) 
+                      : Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _showPublicMemories ? Icons.public : Icons.lock_outline,
+                      color: _showPublicMemories ? Colors.green : Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _showPublicMemories
+                            ? 'Showing all memories (public + yours)'
+                            : 'Showing only your memories',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_markers.length} found',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       floatingActionButton: _markers.isNotEmpty ? FloatingActionButton(
         onPressed: () {
-          // Center the map on the user's current location
-          // or zoom to fit all markers
           _zoomToFitAllMarkers();
         },
         backgroundColor: Theme.of(context).primaryColor,
@@ -642,111 +756,6 @@ class _MemoryMapViewState extends State<MemoryMapView> with AutomaticKeepAliveCl
     }
   ]
   ''';
-
-  // Add this method to create mock memory data
-  Future<void> _loadMockMemories() async {
-    // Create mock memory capsules
-    final mockMemories = [
-      MemoryCapsule(
-        id: 'mock-1',
-        userId: 'mock-user',
-        capsuleType: 'standard',
-        media: [
-          MediaItem(
-            url: 'mock-image-1',
-            type: 'image',
-            fileName: 'mock-photo.jpg',
-          ),
-        ],
-        location: const GeoPoint(47.5615, -52.7126), // St. John's
-        locationName: "Water Street, St. John's, NL, Canada",
-        message: "My first memory in downtown St. John's",
-        createdAt: DateTime.now().subtract(const Duration(days: 7)),
-      ),
-      MemoryCapsule(
-        id: 'mock-2',
-        userId: 'mock-user',
-        capsuleType: 'birthday',
-        media: [
-          MediaItem(
-            url: 'mock-image-2',
-            type: 'image',
-            fileName: 'birthday-photo.jpg',
-          ),
-          MediaItem(
-            url: 'mock-video-1',
-            type: 'video',
-            fileName: 'birthday-video.mp4',
-          ),
-        ],
-        location: const GeoPoint(47.5701, -52.6819), // Signal Hill
-        locationName: "Signal Hill, St. John's, NL, Canada",
-        message: "Birthday celebration with a beautiful view!",
-        createdAt: DateTime.now().subtract(const Duration(days: 14)),
-      ),
-      MemoryCapsule(
-        id: 'mock-3',
-        userId: 'mock-user',
-        capsuleType: 'travel',
-        media: [
-          MediaItem(
-            url: 'mock-image-3',
-            type: 'image',
-            fileName: 'travel-photo.jpg',
-          ),
-          MediaItem(
-            url: 'mock-audio-1',
-            type: 'audio',
-            fileName: 'harbor-sounds.mp3',
-          ),
-        ],
-        location: const GeoPoint(47.5649, -52.7093), // Harbour
-        locationName: "Harbour Drive, St. John's, NL, Canada",
-        message: "Watching ships in the harbor",
-        createdAt: DateTime.now().subtract(const Duration(days: 30)),
-      ),
-    ];
-
-    // Create markers for each mock memory
-    Set<Marker> markers = {};
-    for (var memory in mockMemories) {
-      final marker = Marker(
-        markerId: MarkerId(memory.id ?? 'mock-${DateTime.now().millisecondsSinceEpoch}'),
-        position: LatLng(memory.location.latitude, memory.location.longitude),
-        infoWindow: InfoWindow(
-          title: memory.type.capitalize(),
-          snippet: memory.message.isNotEmpty
-              ? (memory.message.length > 30
-                  ? '${memory.message.substring(0, 30)}...'
-                  : memory.message)
-              : 'Created on ${_formatDate(memory.createdAt)}',
-          onTap: () {
-            _showMemoryDetails(memory);
-          },
-        ),
-        icon: await _getMarkerIcon(memory.type),
-      );
-
-      markers.add(marker);
-    }
-
-    // Update the markers
-    setState(() {
-      _markers = markers;
-      _isLoading = false;
-
-      // Center map on first mock memory
-      _initialCameraPosition = CameraPosition(
-        target: LatLng(mockMemories.first.location.latitude, mockMemories.first.location.longitude),
-        zoom: 12,
-      );
-
-      // Animate camera if map is already initialized
-      _mapController?.animateCamera(
-        CameraUpdate.newCameraPosition(_initialCameraPosition),
-      );
-    });
-  }
 }
 
 // Extension to capitalize strings
@@ -754,4 +763,4 @@ extension StringExtension on String {
   String capitalize() {
     return isNotEmpty ? '${this[0].toUpperCase()}${substring(1)}' : '';
   }
-} 
+}

@@ -22,6 +22,7 @@ class MemoryProvider with ChangeNotifier {
   GeoPoint _location = const GeoPoint(0, 0);
   String _locationName = '';
   String _message = '';
+  MemoryPrivacy _privacy = MemoryPrivacy.private;
   
   // Getters
   String get selectedCapsule => _selectedCapsule;
@@ -29,6 +30,7 @@ class MemoryProvider with ChangeNotifier {
   GeoPoint get location => _location;
   String get locationName => _locationName;
   String get message => _message;
+  MemoryPrivacy get privacy => _privacy;
   
   // Status
   bool _isLoading = false;
@@ -56,6 +58,12 @@ class MemoryProvider with ChangeNotifier {
     notifyListeners();
   }
   
+  // Set privacy
+  void setPrivacy(MemoryPrivacy privacy) {
+    _privacy = privacy;
+    notifyListeners();
+  }
+  
   // Clear all data (reset)
   void reset() {
     _selectedCapsule = 'standard';
@@ -71,6 +79,7 @@ class MemoryProvider with ChangeNotifier {
     _location = const GeoPoint(0, 0);
     _locationName = '';
     _message = '';
+    _privacy = MemoryPrivacy.private;
     notifyListeners();
   }
   
@@ -272,6 +281,7 @@ class MemoryProvider with ChangeNotifier {
         locationName: _locationName,
         message: _message,
         createdAt: DateTime.now(),
+        privacy: _privacy,
       );
       
       // Save to Firestore

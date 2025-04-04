@@ -1,3 +1,4 @@
+// lib/features/profile/screens/edit_memory_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:async';
 import '../../../services/location_service.dart';
+import '../../create_memory/widgets/privacy_selector.dart';
 
 class EditMemoryScreen extends StatefulWidget {
   final MemoryCapsule memory;
@@ -25,6 +27,7 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
   late TextEditingController _messageController;
   late TextEditingController _locationController;
   late String _selectedCapsuleType;
+  late MemoryPrivacy _selectedPrivacy;
   bool _isLoading = false;
   String? _error;
   bool _showMap = false;  // Control map visibility
@@ -73,6 +76,7 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
     _messageController = TextEditingController(text: widget.memory.message);
     _locationController = TextEditingController(text: widget.memory.locationName);
     _selectedCapsuleType = widget.memory.capsuleType;
+    _selectedPrivacy = widget.memory.privacy;
     _selectedLocation = LatLng(widget.memory.location.latitude, widget.memory.location.longitude);
   }
 
@@ -83,6 +87,34 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
     super.dispose();
   }
 
+  // Get color for selected capsule type
+  Color _getCapsuleColor() {
+    final capsule = _capsuleTypes.firstWhere(
+      (c) => c['id'] == _selectedCapsuleType,
+      orElse: () => _capsuleTypes[0],
+    );
+    return capsule['color'];
+  }
+
+  // Get icon for selected capsule type
+  IconData _getCapsuleIcon() {
+    final capsule = _capsuleTypes.firstWhere(
+      (c) => c['id'] == _selectedCapsuleType,
+      orElse: () => _capsuleTypes[0],
+    );
+    return capsule['icon'];
+  }
+
+  // Get name for selected capsule type
+  String _getCapsuleName() {
+    final capsule = _capsuleTypes.firstWhere(
+      (c) => c['id'] == _selectedCapsuleType,
+      orElse: () => _capsuleTypes[0],
+    );
+    return capsule['name'];
+  }
+
+  // Save changes to the memory
   Future<void> _saveChanges() async {
     if (_isLoading) return;
 
@@ -101,6 +133,7 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
           _selectedLocation.longitude,
         ),
         lastUpdatedAt: DateTime.now(),
+        privacy: _selectedPrivacy, // Include privacy setting
       );
 
       final provider = Provider.of<MemoryHistoryProvider>(context, listen: false);
@@ -121,6 +154,50 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  // Search for places
+  void _searchPlaces(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      setState(() {
+        _isSearching = true;
+        _searchResults = [];
+      });
+      
+      _locationService.searchPlaces(query).then((places) {
+        if (mounted) {
+          setState(() {
+            _searchResults = places;
+            _isSearching = false;
+          });
+        }
+      });
+    });
+  }
+
+  // Select a place from search results
+  void _selectPlace(PlaceData place) async {
+    setState(() {
+      _locationController.text = place.formattedAddress ?? place.name;
+      _searchResults = [];
+      
+      if (place.lat != null && place.lng != null) {
+        _selectedLocation = LatLng(place.lat!, place.lng!);
+        _markers = {
+          Marker(
+            markerId: const MarkerId('selected_location'),
+            position: _selectedLocation,
+          ),
+        };
+        
+        if (_mapController != null) {
+          _mapController!.animateCamera(
+            CameraUpdate.newLatLngZoom(_selectedLocation, 15),
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -247,6 +324,19 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
               ),
             ),
 
+            const SizedBox(height: 24),
+            
+            // Privacy selector
+            PrivacySelectorWidget(
+              selectedPrivacy: _selectedPrivacy,
+              onPrivacyChanged: (privacy) {
+                setState(() {
+                  _selectedPrivacy = privacy;
+                });
+              },
+              isDarkMode: isDarkMode,
+            ),
+            
             const SizedBox(height: 24),
 
             // Location section
@@ -451,50 +541,4 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
       ),
     );
   }
-
-  Color _getCapsuleColor() {
-    final capsule = _capsuleTypes.firstWhere(
-      (c) => c['id'] == _selectedCapsuleType,
-      orElse: () => _capsuleTypes[0],
-    );
-    return capsule['color'];
-  }
-
-  IconData _getCapsuleIcon() {
-    final capsule = _capsuleTypes.firstWhere(
-      (c) => c['id'] == _selectedCapsuleType,
-      orElse: () => _capsuleTypes[0],
-    );
-    return capsule['icon'];
-  }
-
-  String _getCapsuleName() {
-    final capsule = _capsuleTypes.firstWhere(
-      (c) => c['id'] == _selectedCapsuleType,
-      orElse: () => _capsuleTypes[0],
-    );
-    return capsule['name'];
-  }
-
-  void _searchPlaces(String query) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      _isSearching = true;
-      _searchResults = [];
-      _locationService.searchPlaces(query).then((places) {
-        if (mounted) {
-          setState(() {
-            _searchResults = places;
-          });
-        }
-      });
-    });
-  }
-
-  void _selectPlace(PlaceData place) {
-    setState(() {
-      _locationController.text = place.formattedAddress ?? place.name;
-      _showMap = false;
-    });
-  }
-} 
+}
