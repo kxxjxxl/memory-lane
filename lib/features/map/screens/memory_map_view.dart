@@ -134,10 +134,18 @@ class _MemoryMapViewState extends State<MemoryMapView>
             // Use different colors for own vs. public memories
             icon: await _getMarkerIcon(memory.type,
                 isUserMemory: memory.userId == user.uid),
-            // Handle tap to show detailed memory
-            onTap: () => _showMemoryDetails(memory),
-            // Add a custom info window for hover effect
-            consumeTapEvents: true,
+                infoWindow: InfoWindow(
+              title: memory.type.capitalize(),
+              snippet: memory.message.isNotEmpty 
+                ? memory.message.length > 50 
+                  ? '${memory.message.substring(0, 50)}...' 
+                  : memory.message
+                : 'Tap to view details',
+                onTap: ()=>
+                  _showMemoryDetails(memory)
+                
+            ),
+           
           );
 
           markers.add(marker);
