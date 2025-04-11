@@ -240,37 +240,7 @@ class MemoryProvider with ChangeNotifier {
     
     try {
       // Upload all media files to Firestore
-      final uploadedMedia = <MediaItem>[];
-      
-      for (int i = 0; i < _mediaItems.length; i++) {
-        final item = _mediaItems[i];
-        
-        // Update progress in UI
-        void updateProgress(double progress) {
-          _mediaItems[i] = item.copyWith(
-            uploadProgress: progress,
-          );
-          notifyListeners();
-        }
-        
-        // Upload to Firestore as base64
-        final mediaItem = await _storageService.uploadMedia(
-          file: item.file,
-          mediaType: item.type,
-          onProgress: updateProgress,
-        );
-        
-        // Mark as uploaded
-        _mediaItems[i] = item.copyWith(
-          isUploaded: true,
-          uploadProgress: 1.0,
-          uploadedItem: mediaItem,
-        );
-        notifyListeners();
-        
-        // Add to final list
-        uploadedMedia.add(mediaItem);
-      }
+      final uploadedMedia = await uploadMedia();
       
       // Create memory capsule
       final memory = MemoryCapsule(
@@ -297,6 +267,53 @@ class MemoryProvider with ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+  
+  // Upload media items and return the uploaded MediaItem list
+  Future<List<MediaItem>> uploadMedia() async {
+    if (currentUserId == null) {
+      throw Exception('User not authenticated');
+    }
+    
+    final uploadedMedia = <MediaItem>[];
+    
+    for (int i = 0; i < _mediaItems.length; i++) {
+      final item = _mediaItems[i];
+      
+      // Skip already uploaded items
+      if (item.isUploaded && item.uploadedItem != null) {
+        uploadedMedia.add(item.uploadedItem!);
+        continue;
+      }
+      
+      // Update progress in UI
+      void updateProgress(double progress) {
+        _mediaItems[i] = item.copyWith(
+          uploadProgress: progress,
+        );
+        notifyListeners();
+      }
+      
+      // Upload to Firestore as base64
+      final mediaItem = await _storageService.uploadMedia(
+        file: item.file,
+        mediaType: item.type,
+        onProgress: updateProgress,
+      );
+      
+      // Mark as uploaded
+      _mediaItems[i] = item.copyWith(
+        isUploaded: true,
+        uploadProgress: 1.0,
+        uploadedItem: mediaItem,
+      );
+      notifyListeners();
+      
+      // Add to final list
+      uploadedMedia.add(mediaItem);
+    }
+    
+    return uploadedMedia;
   }
   
   // Helper method to set loading state

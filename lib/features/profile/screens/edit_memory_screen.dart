@@ -10,6 +10,8 @@ import 'package:geocoding/geocoding.dart';
 import 'dart:async';
 import '../../../services/location_service.dart';
 import '../../create_memory/widgets/privacy_selector.dart';
+import '../../create_memory/providers/memory_provider.dart';
+import '../../create_memory/widgets/base64_media_display.dart';
 
 class EditMemoryScreen extends StatefulWidget {
   final MemoryCapsule memory;
@@ -31,6 +33,10 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
   bool _isLoading = false;
   String? _error;
   bool _showMap = false;  // Control map visibility
+
+  // Media related variables
+  List<MediaItem> _mediaItems = [];
+  bool _isMediaChanged = false;
 
   // Map related variables
   GoogleMapController? _mapController;
@@ -78,6 +84,7 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
     _selectedCapsuleType = widget.memory.capsuleType;
     _selectedPrivacy = widget.memory.privacy;
     _selectedLocation = LatLng(widget.memory.location.latitude, widget.memory.location.longitude);
+    _mediaItems = List.from(widget.memory.media);
   }
 
   @override
@@ -133,7 +140,8 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
           _selectedLocation.longitude,
         ),
         lastUpdatedAt: DateTime.now(),
-        privacy: _selectedPrivacy, // Include privacy setting
+        privacy: _selectedPrivacy,
+        media: _mediaItems, // Include updated media items
       );
 
       final provider = Provider.of<MemoryHistoryProvider>(context, listen: false);
@@ -153,6 +161,65 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  // Remove media item
+  void _removeMediaItem(int index) {
+    setState(() {
+      _mediaItems.removeAt(index);
+      _isMediaChanged = true;
+    });
+  }
+
+  // Add images from memory provider
+  Future<void> _addImages() async {
+    final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+    await memoryProvider.pickImages();
+    
+    if (memoryProvider.mediaItems.isNotEmpty) {
+      final newMediaItems = await memoryProvider.uploadMedia();
+      
+      setState(() {
+        _mediaItems.addAll(newMediaItems);
+        _isMediaChanged = true;
+      });
+      
+      memoryProvider.clearMedia();
+    }
+  }
+
+  // Add videos from memory provider
+  Future<void> _addVideos() async {
+    final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+    await memoryProvider.pickVideos();
+    
+    if (memoryProvider.mediaItems.isNotEmpty) {
+      final newMediaItems = await memoryProvider.uploadMedia();
+      
+      setState(() {
+        _mediaItems.addAll(newMediaItems);
+        _isMediaChanged = true;
+      });
+      
+      memoryProvider.clearMedia();
+    }
+  }
+
+  // Add audio from memory provider
+  Future<void> _addAudio() async {
+    final memoryProvider = Provider.of<MemoryProvider>(context, listen: false);
+    await memoryProvider.pickAudio();
+    
+    if (memoryProvider.mediaItems.isNotEmpty) {
+      final newMediaItems = await memoryProvider.uploadMedia();
+      
+      setState(() {
+        _mediaItems.addAll(newMediaItems);
+        _isMediaChanged = true;
+      });
+      
+      memoryProvider.clearMedia();
     }
   }
 
@@ -300,6 +367,88 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
                 },
               ),
             ),
+
+            const SizedBox(height: 24),
+
+            // Media Section
+            Text(
+              'Media',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            
+            // Media selection buttons
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMediaButton(
+                    icon: Icons.photo,
+                    label: 'Photos',
+                    color: Colors.blue,
+                    onTap: _addImages,
+                    isDarkMode: isDarkMode,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMediaButton(
+                    icon: Icons.videocam,
+                    label: 'Videos',
+                    color: Colors.red,
+                    onTap: _addVideos,
+                    isDarkMode: isDarkMode,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMediaButton(
+                    icon: Icons.mic,
+                    label: 'Audio',
+                    color: Colors.green,
+                    onTap: _addAudio,
+                    isDarkMode: isDarkMode,
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Media preview grid
+            _mediaItems.isEmpty
+              ? Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                    ),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_library_outlined,
+                          size: 48,
+                          color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No media attached',
+                          style: TextStyle(
+                            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SizedBox(
+                  height: 200,
+                  child: _buildMediaGrid(),
+                ),
 
             const SizedBox(height: 24),
 
@@ -540,5 +689,191 @@ class _EditMemoryScreenState extends State<EditMemoryScreen> {
         ),
       ),
     );
+  }
+
+  // Build media button
+  Widget _buildMediaButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isDarkMode,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 12,
+        ),
+        decoration: BoxDecoration(
+          color: isDarkMode ? Colors.grey[800] : color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: color,
+              size: 28,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDarkMode ? Colors.white : color,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build media grid
+  Widget _buildMediaGrid() {
+    return GridView.builder(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      scrollDirection: Axis.horizontal,
+      itemCount: _mediaItems.length,
+      itemBuilder: (context, index) {
+        final mediaItem = _mediaItems[index];
+        return Stack(
+          children: [
+            // Media preview
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.3),
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Base64MediaPreview(
+                mediaId: mediaItem.url,
+                mediaType: mediaItem.type,
+                showControls: false,
+              ),
+            ),
+            
+            // Remove button
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => _removeMediaItem(index),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ),
+            
+            // Type indicator
+            Positioned(
+              bottom: 4,
+              left: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _getTypeColor(mediaItem.type).withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _getTypeIcon(mediaItem.type),
+                      color: Colors.white,
+                      size: 12,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      _getTypeLabel(mediaItem.type),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Helper methods for media types
+  IconData _getTypeIcon(String type) {
+    switch (type) {
+      case 'image':
+        return Icons.image;
+      case 'video':
+        return Icons.videocam;
+      case 'audio':
+        return Icons.audiotrack;
+      default:
+        return Icons.attachment;
+    }
+  }
+
+  String _getTypeLabel(String type) {
+    switch (type) {
+      case 'image':
+        return 'Image';
+      case 'video':
+        return 'Video';
+      case 'audio':
+        return 'Audio';
+      default:
+        return 'File';
+    }
+  }
+
+  Color _getTypeColor(String type) {
+    switch (type) {
+      case 'image':
+        return Colors.blue;
+      case 'video':
+        return Colors.red;
+      case 'audio':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
   }
 }
