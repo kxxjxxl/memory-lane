@@ -859,7 +859,7 @@ class _MemoryMapViewState extends State<MemoryMapView>
               color: _showPublicMemories ? Colors.green : Colors.orange,
             ),
             tooltip: _showPublicMemories
-                ? 'Showing all memories (public + yours)'
+                ? 'Showing all memories'
                 : 'Showing only your memories',
             onPressed: () {
               setState(() {
