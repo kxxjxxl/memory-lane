@@ -541,6 +541,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                     // User confirmed, reset data and change capsule
                     setState(() {
                       _selectedCapsule = capsule["id"];
+                      memoryProvider.setCapsuleType(capsule["id"]);
                       memoryProvider.reset(); // Reset all data
                     });
                   }
@@ -549,6 +550,7 @@ class _TimeCapsuleScreenState extends State<TimeCapsuleScreen> {
                 // No unsaved changes or same capsule, just update the selection
                 setState(() {
                   _selectedCapsule = capsule["id"];
+                  memoryProvider.setCapsuleType(capsule["id"]);
                 });
               }
             },
